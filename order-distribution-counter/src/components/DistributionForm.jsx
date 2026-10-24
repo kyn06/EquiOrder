@@ -1,6 +1,9 @@
 function DistributionForm({
   activeCount,
   history,
+  selectedDay,
+  progressMessage,
+  onClearDay,
   onOrdersChange,
   onSubmit,
   orders,
@@ -15,7 +18,7 @@ function DistributionForm({
             </h3>
           </div>
           <span className="w-fit shrink-0 rounded-full border border-white/80 bg-[#eaf2fc] px-3 py-1.5 text-xs font-bold text-blue-800 neo-raised-sm">
-            {activeCount} available
+            {selectedDay} · {activeCount} available
           </span>
         </div>
 
@@ -53,13 +56,23 @@ function DistributionForm({
         </form>
 
         <section className="mt-5 border-t border-white/80 pt-4">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h4 className="text-sm font-extrabold text-[#102a5c]">
               Recent batches
             </h4>
-            <span className="text-xs font-medium text-slate-500">
-              Latest {history.length} of 5
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-medium text-slate-500">
+                Latest {history.length} of 5
+              </span>
+              <button
+                type="button"
+                onClick={onClearDay}
+                aria-label={`Clear saved order progress for ${selectedDay}`}
+                className="min-h-11 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-extrabold text-rose-700 transition-colors hover:bg-rose-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600"
+              >
+                Clear day
+              </button>
+            </div>
           </div>
 
           <div className="neo-inset mt-2 h-44 overflow-y-auto rounded-xl border border-white/80 bg-[#eaf2fc] p-2">
@@ -102,6 +115,9 @@ function DistributionForm({
               </ol>
             )}
           </div>
+          <p aria-live="polite" className="mt-2 min-h-4 text-xs font-medium text-slate-500">
+            {progressMessage}
+          </p>
         </section>
       </div>
     </section>

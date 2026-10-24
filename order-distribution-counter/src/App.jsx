@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import DistributionForm from './components/DistributionForm'
 import Sidebar from './components/Sidebar'
 import StatCard from './components/StatCard'
@@ -64,6 +64,7 @@ const initialTeam = [
 ]
 
 const dailyRosterStorageKey = 'equiorder-daily-rosters-v1'
+const dailyProgressStorageKey = 'equiorder-daily-progress-v1'
 const selectedWeekdayStorageKey = 'equiorder-selected-weekday-v1'
 const weekdays = [
   'Monday',
@@ -134,13 +135,48 @@ function readDailyRosters() {
   }
 }
 
-function hydrateDayRoster(roster) {
+function cacheDailyRosters(rosters) {
+  try {
+    window.localStorage.setItem(dailyRosterStorageKey, JSON.stringify(rosters))
+  } catch {
+    // PostgreSQL remains the primary store if the browser cache is unavailable.
+  }
+}
+
+function readDailyProgress() {
+  if (typeof window === 'undefined') return {}
+
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(dailyProgressStorageKey) || '{}',
+    )
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed
+      : {}
+  } catch {
+    return {}
+  }
+}
+
+function cacheDailyProgress(progress) {
+  try {
+    window.localStorage.setItem(dailyProgressStorageKey, JSON.stringify(progress))
+  } catch {
+    // PostgreSQL remains the primary store if the browser cache is unavailable.
+  }
+}
+
+function hydrateDayRoster(roster, progress = null) {
+  const orderCounts = new Map(
+    (progress?.teammates ?? []).map((person) => [person.id, person]),
+  )
+
   return roster.map((person, index) => ({
     id: Number.isSafeInteger(person.id) ? person.id : index + 1,
     name: typeof person.name === 'string' ? person.name : `Teammate ${index + 1}`,
     status: person.status === 'break' ? 'break' : 'working',
-    completed: 0,
-    pending: 0,
+    completed: orderCounts.get(person.id)?.completed ?? 0,
+    pending: orderCounts.get(person.id)?.pending ?? 0,
     breakStartTime: person.breakStartTime ?? '',
     returnTime: person.returnTime ?? '',
   }))
@@ -167,10 +203,16 @@ function getInitialTheme() {
 function App() {
   const [isDark, setIsDark] = useState(getInitialTheme)
   const [savedRosters, setSavedRosters] = useState(readDailyRosters)
+  const [savedProgress, setSavedProgress] = useState(readDailyProgress)
+  const savedProgressRef = useRef(savedProgress)
   const [selectedDay, setSelectedDay] = useState(getInitialSelectedDay)
+  const selectedDayRef = useRef(selectedDay)
   const [team, setTeam] = useState(() =>
     savedRosters[selectedDay]
-      ? hydrateDayRoster(savedRosters[selectedDay])
+      ? hydrateDayRoster(
+          savedRosters[selectedDay],
+          savedProgress[selectedDay],
+        )
       : initialTeam,
   )
   const [activePage, setActivePage] = useState('dashboard')
@@ -178,14 +220,30 @@ function App() {
     Boolean(savedRosters[selectedDay]),
   )
   const [saveError, setSaveError] = useState('')
+  const [isSavingRoster, setIsSavingRoster] = useState(false)
+  const [apiConnected, setApiConnected] = useState(false)
+  const [progressMessage, setProgressMessage] = useState('')
   const [orders, setOrders] = useState('')
-  const [allocations, setAllocations] = useState(null)
-  const [distributionHistory, setDistributionHistory] = useState([])
+  const [allocations, setAllocations] = useState(
+    () => savedProgress[selectedDay]?.allocations ?? null,
+  )
+  const [distributionHistory, setDistributionHistory] = useState(
+    () => savedProgress[selectedDay]?.recentBatches ?? [],
+  )
 
   const activeCount = team.filter(
     (person) => person.status === 'working',
   ).length
   const breakCount = team.length - activeCount
+  const orderProgressPayload = JSON.stringify({
+    teammates: team.map(({ id, completed, pending }) => ({
+      id,
+      completed,
+      pending,
+    })),
+    allocations,
+    recentBatches: distributionHistory,
+  })
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark)
     document
@@ -200,6 +258,7 @@ function App() {
   }, [isDark])
 
   useEffect(() => {
+    selectedDayRef.current = selectedDay
     try {
       window.localStorage.setItem(selectedWeekdayStorageKey, selectedDay)
     } catch {
@@ -207,15 +266,148 @@ function App() {
     }
   }, [selectedDay])
 
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadRostersFromDatabase() {
+      try {
+        const response = await fetch('/api/rosters')
+        const result = await response.json()
+        if (!response.ok) {
+          throw new Error(result.error || 'Could not load saved rosters.')
+        }
+
+        const databaseRosters = result.rosters ?? {}
+        const databaseProgress = result.progress ?? {}
+        const cachedRosters = readDailyRosters()
+        const cachedProgress = readDailyProgress()
+
+        for (const [weekday, roster] of Object.entries(cachedRosters)) {
+          if (roster.length > 0 && !databaseRosters[weekday]?.length) {
+            const migrationResponse = await fetch(
+              `/api/rosters/${encodeURIComponent(weekday)}`,
+              {
+                method: 'PUT',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ roster }),
+              },
+            )
+            if (!migrationResponse.ok) {
+              const migrationResult = await migrationResponse.json()
+              throw new Error(
+                migrationResult.error || `Could not migrate ${weekday}'s roster.`,
+              )
+            }
+            databaseRosters[weekday] = roster
+          }
+        }
+
+        for (const [weekday, progress] of Object.entries(cachedProgress)) {
+          if (!databaseProgress[weekday]) {
+            const migrationResponse = await fetch(
+              `/api/progress/${encodeURIComponent(weekday)}`,
+              {
+                method: 'PUT',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ progress }),
+              },
+            )
+            if (!migrationResponse.ok) {
+              const migrationResult = await migrationResponse.json()
+              throw new Error(
+                migrationResult.error || `Could not migrate ${weekday}'s order progress.`,
+              )
+            }
+            databaseProgress[weekday] = progress
+          }
+        }
+
+        if (cancelled) return
+
+        setSavedRosters(databaseRosters)
+        setSavedProgress(databaseProgress)
+        savedProgressRef.current = databaseProgress
+        cacheDailyRosters(databaseRosters)
+        cacheDailyProgress(databaseProgress)
+        const activeDay = selectedDayRef.current
+        const activeRoster = databaseRosters[activeDay]?.length
+          ? databaseRosters[activeDay]
+          : cachedRosters[activeDay]?.length
+            ? cachedRosters[activeDay]
+            : initialTeam
+        setTeam(hydrateDayRoster(activeRoster, databaseProgress[activeDay]))
+        setRosterSaved(Boolean(databaseRosters[activeDay]?.length))
+        setAllocations(databaseProgress[activeDay]?.allocations ?? null)
+        setDistributionHistory(databaseProgress[activeDay]?.recentBatches ?? [])
+        setApiConnected(true)
+        setSaveError('')
+      } catch {
+        if (!cancelled) {
+          setApiConnected(false)
+          setSaveError(
+            'Cannot reach PostgreSQL. Check that the API is running and DATABASE_URL is set. Using this browser’s saved roster.',
+          )
+        }
+      }
+    }
+
+    loadRostersFromDatabase()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    const progress = JSON.parse(orderProgressPayload)
+    if (!apiConnected) return undefined
+
+    const timeout = window.setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `/api/progress/${encodeURIComponent(selectedDay)}`,
+          {
+            method: 'PUT',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ progress }),
+          },
+        )
+        if (!response.ok) throw new Error('Could not save this day’s order progress.')
+      } catch {
+        setApiConnected(false)
+        setProgressMessage('PostgreSQL is unavailable. Order progress is cached in this browser.')
+      }
+    }, 300)
+
+    return () => window.clearTimeout(timeout)
+  }, [
+    selectedDay,
+    orderProgressPayload,
+    apiConnected,
+  ])
+
+  function rememberProgress(day, teamSnapshot, allocationSnapshot, historySnapshot) {
+    const progress = {
+      teammates: teamSnapshot.map(({ id, completed, pending }) => ({
+        id,
+        completed,
+        pending,
+      })),
+      allocations: allocationSnapshot,
+      recentBatches: historySnapshot,
+    }
+    const updated = { ...savedProgressRef.current, [day]: progress }
+    savedProgressRef.current = updated
+    setSavedProgress(updated)
+    cacheDailyProgress(updated)
+  }
+
   function updateTeamStatus(id, status) {
-    setTeam((current) =>
-      current.map((person) =>
-        person.id === id
-          ? { ...person, status }
-          : person,
-      ),
+    const updatedTeam = team.map((person) =>
+      person.id === id ? { ...person, status } : person,
     )
+    setTeam(updatedTeam)
     setAllocations(null)
+    rememberProgress(selectedDay, updatedTeam, null, distributionHistory)
     setRosterSaved(false)
   }
 
@@ -226,47 +418,40 @@ function App() {
       return
     }
 
-    setTeam((current) => {
-      const updated = current.map((person) =>
-        person.id === id ? { ...person, [field]: count } : person,
+    let updatedTeam = team.map((person) =>
+      person.id === id ? { ...person, [field]: count } : person,
+    )
+
+    if (field === 'completed' && updatedTeam.length > 0) {
+      const highestCompleted = Math.max(
+        ...updatedTeam.map((person) => person.completed),
       )
+      updatedTeam = updatedTeam.map((person) => ({
+        ...person,
+        pending: Math.max(0, highestCompleted - person.completed),
+      }))
+    }
 
-      if (field === 'completed' && updated.length > 0) {
-        const highestCompleted = Math.max(
-          ...updated.map((person) => person.completed),
-        )
-
-        return updated.map((person) => {
-          const pending = Math.max(
-            0,
-            highestCompleted - person.completed,
-          )
-
-          return {
-            ...person,
-            pending,
-          }
-        })
-      }
-
-      return updated
-    })
+    setTeam(updatedTeam)
     setAllocations(null)
+    rememberProgress(selectedDay, updatedTeam, null, distributionHistory)
   }
 
   function updateTeamName(id, name) {
-    setTeam((current) =>
-      current.map((person) => (person.id === id ? { ...person, name } : person)),
+    const updatedTeam = team.map((person) =>
+      person.id === id ? { ...person, name } : person,
     )
+    setTeam(updatedTeam)
+    rememberProgress(selectedDay, updatedTeam, allocations, distributionHistory)
     setRosterSaved(false)
   }
 
   function updateBreakTime(id, field, value) {
-    setTeam((current) =>
-      current.map((person) =>
-        person.id === id ? { ...person, [field]: value } : person,
-      ),
+    const updatedTeam = team.map((person) =>
+      person.id === id ? { ...person, [field]: value } : person,
     )
+    setTeam(updatedTeam)
+    rememberProgress(selectedDay, updatedTeam, allocations, distributionHistory)
     setRosterSaved(false)
   }
 
@@ -276,27 +461,26 @@ function App() {
 
   function loadDay(day) {
     const savedRoster = savedRosters[day]
-    const nextTeam = savedRoster
-      ? hydrateDayRoster(savedRoster)
-      : team.map((person) => ({
-          ...person,
-          status: 'working',
-          completed: 0,
-          pending: 0,
-          breakStartTime: '',
-          returnTime: '',
-        }))
+    const dayProgress = savedProgressRef.current[day]
+    const rosterToLoad = savedRoster ?? team.map((person) => ({
+      ...person,
+      status: 'working',
+      breakStartTime: '',
+      returnTime: '',
+    }))
+    const nextTeam = hydrateDayRoster(rosterToLoad, dayProgress)
 
     setSelectedDay(day)
     setTeam(nextTeam)
     setRosterSaved(Boolean(savedRoster))
     setSaveError('')
+    setProgressMessage('')
     setOrders('')
-    setAllocations(null)
-    setDistributionHistory([])
+    setAllocations(dayProgress?.allocations ?? null)
+    setDistributionHistory(dayProgress?.recentBatches ?? [])
   }
 
-  function saveCurrentDay() {
+  async function saveCurrentDay() {
     const roster = team.map(({ id, name, status, breakStartTime, returnTime }) => ({
       id,
       name,
@@ -306,65 +490,82 @@ function App() {
     }))
     const updatedRosters = { ...savedRosters, [selectedDay]: roster }
 
-    setSavedRosters(updatedRosters)
+    setIsSavingRoster(true)
     try {
-      window.localStorage.setItem(
-        dailyRosterStorageKey,
-        JSON.stringify(updatedRosters),
+      const response = await fetch(
+        `/api/rosters/${encodeURIComponent(selectedDay)}`,
+        {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ roster }),
+        },
       )
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || 'Could not save this roster.')
+      }
+
+      setSavedRosters(updatedRosters)
+      cacheDailyRosters(updatedRosters)
       setRosterSaved(true)
       setSaveError('')
     } catch {
-      setRosterSaved(false)
-      setSaveError('Could not save this day in browser storage.')
+      try {
+        window.localStorage.setItem(
+          dailyRosterStorageKey,
+          JSON.stringify(updatedRosters),
+        )
+        setSavedRosters(updatedRosters)
+        setRosterSaved(true)
+        setSaveError('PostgreSQL save failed. Saved locally in this browser.')
+      } catch {
+        setRosterSaved(false)
+        setSaveError('Could not save this roster to PostgreSQL or browser storage.')
+      }
+    } finally {
+      setIsSavingRoster(false)
     }
   }
 
   function handleAddTeamMember() {
-    setTeam((current) => {
-      if (current.length >= 100) {
-        return current
-      }
+    if (team.length >= 100) return
 
-      const id = current.reduce(
-        (highest, person) => Math.max(highest, person.id),
-        0,
-      ) + 1
-
-      return [
-        ...current,
-        {
-          id,
-          name: `Teammate ${id}`,
-          status: 'working',
-          pending: 0,
-          completed: 0,
-          breakStartTime: '',
-          returnTime: '',
-        },
-      ]
-    })
+    const id = team.reduce(
+      (highest, person) => Math.max(highest, person.id),
+      0,
+    ) + 1
+    const updatedTeam = [
+      ...team,
+      {
+        id,
+        name: `Teammate ${id}`,
+        status: 'working',
+        pending: 0,
+        completed: 0,
+        breakStartTime: '',
+        returnTime: '',
+      },
+    ]
+    setTeam(updatedTeam)
     setAllocations(null)
+    rememberProgress(selectedDay, updatedTeam, null, distributionHistory)
     setRosterSaved(false)
   }
 
   function handleRemoveTeamMember(id) {
-    setTeam((current) => {
-      if (current.length <= 1) {
-        return current
-      }
+    if (team.length <= 1) return
 
-      const remaining = current.filter((person) => person.id !== id)
-      const highestCompleted = Math.max(
-        ...remaining.map((person) => person.completed),
-      )
-
-      return remaining.map((person) => ({
-        ...person,
-        pending: Math.max(0, highestCompleted - person.completed),
-      }))
-    })
+    const remaining = team.filter((person) => person.id !== id)
+    const highestCompleted = Math.max(
+      ...remaining.map((person) => person.completed),
+    )
+    const updatedTeam = remaining.map((person) => ({
+      ...person,
+      pending: Math.max(0, highestCompleted - person.completed),
+    }))
+    setTeam(updatedTeam)
     setAllocations(null)
+    rememberProgress(selectedDay, updatedTeam, null, distributionHistory)
     setRosterSaved(false)
   }
 
@@ -385,15 +586,14 @@ function App() {
       ...updatedTeam.map((person) => person.completed),
     )
 
-    setTeam(
-      updatedTeam.map((person) => ({
-        ...person,
-        pending: Math.max(0, highestCompleted - person.completed),
-      })),
-    )
+    const balancedTeam = updatedTeam.map((person) => ({
+      ...person,
+      pending: Math.max(0, highestCompleted - person.completed),
+    }))
+    setTeam(balancedTeam)
     setAllocations(result)
     const completedAt = new Date().toISOString()
-    setDistributionHistory((current) => [
+    const updatedHistory = [
       {
         id: completedAt,
         completedAt,
@@ -405,14 +605,63 @@ function App() {
             count: result[person.id] ?? 0,
           })),
       },
-      ...current,
-    ].slice(0, 5))
+      ...distributionHistory,
+    ].slice(0, 5)
+    setDistributionHistory(updatedHistory)
+    rememberProgress(selectedDay, balancedTeam, result, updatedHistory)
     setOrders('')
   }
 
   function handleOrdersInput(value) {
     setOrders(value)
     setAllocations(null)
+    rememberProgress(selectedDay, team, null, distributionHistory)
+  }
+
+  async function handleClearDay() {
+    if (!window.confirm(
+      `Clear completed orders, pending orders, new allocations, and recent batches for ${selectedDay}?`,
+    )) {
+      return
+    }
+
+    const clearedTeam = team.map((person) => ({
+      ...person,
+      completed: 0,
+      pending: 0,
+    }))
+    const clearedProgress = {
+      teammates: clearedTeam.map(({ id }) => ({ id, completed: 0, pending: 0 })),
+      allocations: null,
+      recentBatches: [],
+    }
+
+    setTeam(clearedTeam)
+    setAllocations(null)
+    setDistributionHistory([])
+    setOrders('')
+    setProgressMessage('')
+    const updatedProgress = {
+      ...savedProgressRef.current,
+      [selectedDay]: clearedProgress,
+    }
+    savedProgressRef.current = updatedProgress
+    setSavedProgress(updatedProgress)
+    cacheDailyProgress(updatedProgress)
+
+    if (!apiConnected) return
+
+    try {
+      const response = await fetch(
+        `/api/progress/${encodeURIComponent(selectedDay)}`,
+        { method: 'DELETE' },
+      )
+      if (!response.ok) throw new Error('Could not clear saved order progress.')
+      setProgressMessage(`${selectedDay} order progress cleared`)
+    } catch {
+      setApiConnected(false)
+      setProgressMessage('Could not reach PostgreSQL. Progress was cleared in this browser only.')
+    }
   }
 
   return (
@@ -537,6 +786,9 @@ function App() {
               <DistributionForm
                 activeCount={activeCount}
                 history={distributionHistory}
+                selectedDay={selectedDay}
+                progressMessage={progressMessage}
+                onClearDay={handleClearDay}
                 onSubmit={handleDistribution}
                 orders={orders}
                 onOrdersChange={handleOrdersInput}
@@ -555,6 +807,7 @@ function App() {
             weekdays={weekdays}
             rosterSaved={rosterSaved}
             saveError={saveError}
+            isSaving={isSavingRoster}
             onAddTeamMember={handleAddTeamMember}
             onRemoveTeamMember={handleRemoveTeamMember}
             onDaySelect={selectDay}

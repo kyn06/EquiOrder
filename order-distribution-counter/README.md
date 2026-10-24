@@ -1,16 +1,40 @@
-# React + Vite
+# EquiOrder
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+EquiOrder is a React and Vite order distribution dashboard with a small PostgreSQL API.
 
-Currently, two official plugins are available:
+## PostgreSQL setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Install PostgreSQL and create a database named `equiorder`. For a local PostgreSQL installation with command line tools available, run:
 
-## React Compiler
+```powershell
+createdb equiorder
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Copy `.env.example` to `.env` and set `DATABASE_URL` to your PostgreSQL connection string. For example:
 
-## Expanding the ESLint configuration
+```text
+DATABASE_URL=postgresql://postgres:your_password@localhost:5432/equiorder
+API_PORT=3001
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+If your password contains URL-reserved characters such as `@`, `#`, or `/`, percent-encode those characters in the connection string.
+
+Install dependencies:
+
+```powershell
+npm install
+```
+
+Run the API and frontend in separate terminals:
+
+```powershell
+npm run server
+```
+
+```powershell
+npm run dev
+```
+
+On startup, the API creates the tables from `server/schema.sql` if they do not exist. The frontend saves and loads each weekday's teammate names, work status, time-only break/return fields, completed and pending counts, the latest allocations, and the five most recent batches. Progress stays with the selected weekday until you use **Clear day** on the dashboard to reset it. Existing saved weekday rosters and cached order progress in browser storage are copied into PostgreSQL when that weekday does not yet have database data.
+
+The API health check is available at `http://localhost:3001/api/health`.

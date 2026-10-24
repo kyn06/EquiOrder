@@ -4,6 +4,7 @@ function TeamEditor({
   weekdays,
   rosterSaved,
   saveError,
+  isSaving,
   onAddTeamMember,
   onRemoveTeamMember,
   onDaySelect,
@@ -54,9 +55,10 @@ function TeamEditor({
               <button
                 type="button"
                 onClick={onSaveDay}
-                className="min-h-12 shrink-0 rounded-2xl border border-blue-700 bg-blue-700 px-5 py-3 text-sm font-extrabold text-white transition-colors hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+                disabled={isSaving}
+                className="min-h-12 shrink-0 rounded-2xl border border-blue-700 bg-blue-700 px-5 py-3 text-sm font-extrabold text-white transition-colors hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-wait disabled:opacity-60"
               >
-                Save day
+                {isSaving ? 'Saving…' : 'Save day'}
               </button>
             </div>
             <p aria-live="polite" className="min-h-5 text-xs font-medium text-slate-600">
