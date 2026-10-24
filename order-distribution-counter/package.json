@@ -8,7 +8,11 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "server": "node --env-file=.env server/index.js"
+    "server": "node server/index.js",
+    "start": "node server/index.js"
+  },
+  "engines": {
+    "node": ">=20.6"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

@@ -1,6 +1,7 @@
-import { createServer } from 'node:http'
+import 'dotenv/config'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
+import express from 'express'
 import pg from 'pg'
 
 const { Pool } = pg
@@ -13,9 +14,10 @@ const weekdays = new Set([
   'Saturday',
   'Sunday',
 ])
-const port = Number(process.env.API_PORT || 3001)
+const port = Number(process.env.PORT || process.env.API_PORT || 3000)
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 const schemaPath = new URL('./schema.sql', import.meta.url)
+const frontendDistPath = fileURLToPath(new URL('../dist/', import.meta.url))
 
 function sendJson(response, status, value) {
   response.writeHead(status, {
@@ -267,7 +269,14 @@ async function start() {
   const schema = await readFile(fileURLToPath(schemaPath), 'utf8')
   await pool.query(schema)
 
-  const server = createServer((request, response) => {
+  const app = express()
+  app.use(express.static(frontendDistPath, { index: false }))
+  app.use((request, response) => {
+    if (!request.path.startsWith('/api/')) {
+      response.sendFile(fileURLToPath(new URL('../dist/index.html', import.meta.url)))
+      return
+    }
+
     handleRequest(request, response).catch((error) => {
       const status = error.status || 500
       if (status >= 500) console.error(error)
@@ -277,8 +286,8 @@ async function start() {
     })
   })
 
-  server.listen(port, '127.0.0.1', () => {
-    console.log(`EquiOrder API listening on http://localhost:${port}`)
+  const server = app.listen(port, '0.0.0.0', () => {
+    console.log(`EquiOrder listening on port ${port}`)
   })
 
   for (const signal of ['SIGINT', 'SIGTERM']) {
