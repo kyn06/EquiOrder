@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import Swal from 'sweetalert2'
+import 'sweetalert2/dist/sweetalert2.min.css'
 import DistributionForm from './components/DistributionForm'
 import Sidebar from './components/Sidebar'
 import StatCard from './components/StatCard'
@@ -198,6 +200,25 @@ function getInitialTheme() {
   }
 
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false
+}
+
+function confirmDestructiveAction({ title, text, confirmButtonText }) {
+  const isDark = document.documentElement.classList.contains('dark')
+
+  return Swal.fire({
+    title,
+    text,
+    icon: 'warning',
+    showCancelButton: true,
+    reverseButtons: true,
+    focusCancel: true,
+    confirmButtonText,
+    cancelButtonText: 'Cancel',
+    confirmButtonColor: '#dc2626',
+    cancelButtonColor: '#64748b',
+    background: isDark ? '#172235' : '#eaf2fc',
+    color: isDark ? '#eaf2fc' : '#102a5c',
+  }).then((result) => result.isConfirmed)
 }
 
 function App() {
@@ -552,8 +573,18 @@ function App() {
     setRosterSaved(false)
   }
 
-  function handleRemoveTeamMember(id) {
+  async function handleRemoveTeamMember(id) {
     if (team.length <= 1) return
+
+    const teammate = team.find((person) => person.id === id)
+    if (!teammate) return
+
+    const confirmed = await confirmDestructiveAction({
+      title: `Remove ${teammate.name}?`,
+      text: `This removes ${teammate.name} from the ${selectedDay} roster.`,
+      confirmButtonText: 'Remove teammate',
+    })
+    if (!confirmed) return
 
     const remaining = team.filter((person) => person.id !== id)
     const highestCompleted = Math.max(
@@ -619,11 +650,12 @@ function App() {
   }
 
   async function handleClearDay() {
-    if (!window.confirm(
-      `Clear completed orders, pending orders, new allocations, and recent batches for ${selectedDay}?`,
-    )) {
-      return
-    }
+    const confirmed = await confirmDestructiveAction({
+      title: `Clear ${selectedDay}'s order progress?`,
+      text: 'This clears completed and pending counts, new allocations, and recent batches for this weekday.',
+      confirmButtonText: 'Clear day',
+    })
+    if (!confirmed) return
 
     const clearedTeam = team.map((person) => ({
       ...person,
