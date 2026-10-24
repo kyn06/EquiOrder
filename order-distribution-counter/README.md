@@ -1,40 +1,48 @@
 # EquiOrder
 
-EquiOrder is a React and Vite order distribution dashboard with a small PostgreSQL API.
+EquiOrder is a team order distribution dashboard. It helps a team share each incoming batch fairly, track work completed, and account for teammates who are on break.
 
-## PostgreSQL setup
+## What the app does
 
-Install PostgreSQL and create a database named `equiorder`. For a local PostgreSQL installation with command line tools available, run:
+- Shows the active roster, teammate availability, completed and pending orders, and the latest batch allocation.
+- Distributes incoming orders among teammates marked **Working**. Their pending orders are assigned first; remaining orders are divided evenly. Any remainder goes to teammates with the most pending orders.
+- Updates completed totals after each batch and recalculates pending orders so the team can catch up evenly.
+- Keeps the five most recent batches available on the dashboard.
+- Supports light and dark themes.
+
+## Manage weekday rosters
+
+Use **Manage team** to select a weekday and configure that day's roster. Add teammates with **Add teammate**, remove them with the **X** beside their name, and edit names, status, completed and pending counts, and manual break and return times. Time fields are time-only and intended for EST.
+
+Select **Save day** to save the weekday's roster. SweetAlert2 asks for confirmation before a teammate is removed.
+
+The selected weekday is used by the dashboard until another weekday is selected. The dashboard displays the active weekday.
+
+## Daily order progress
+
+Completed and pending counts, the latest allocations, and the five most recent batches are saved for the selected weekday. Use **Clear day** on the dashboard to reset that weekday's order progress before starting fresh. A confirmation appears before clearing; the saved roster remains in place.
+
+## Data storage
+
+The app uses a PostgreSQL API. Weekday rosters are stored separately from order progress, so clearing progress does not delete teammates or break times. Existing weekday rosters and cached progress in browser storage are imported when that weekday has no saved database data.
+
+The database tables are created from [`server/schema.sql`](server/schema.sql) when the API starts. Configure `DATABASE_URL` in a local `.env` file based on [`.env.example`](.env.example). Keep `.env` private.
+
+## Run locally
+
+Requirements: Node.js 20.6+ and PostgreSQL.
+
+1. Create a PostgreSQL database named `equiorder`.
+2. Copy `.env.example` to `.env` and set its `DATABASE_URL`.
+3. Install dependencies with `npm install`.
+4. Run `npm run server` and `npm run dev` in separate terminals.
+5. Open the local URL printed by Vite.
+
+Useful commands:
 
 ```powershell
-createdb equiorder
+npm run dev      # Start the web app
+npm run server   # Start the PostgreSQL API
+npm run build    # Build the web app
+npm run lint     # Check the source code
 ```
-
-Copy `.env.example` to `.env` and set `DATABASE_URL` to your PostgreSQL connection string. For example:
-
-```text
-DATABASE_URL=postgresql://postgres:your_password@localhost:5432/equiorder
-API_PORT=3001
-```
-
-If your password contains URL-reserved characters such as `@`, `#`, or `/`, percent-encode those characters in the connection string.
-
-Install dependencies:
-
-```powershell
-npm install
-```
-
-Run the API and frontend in separate terminals:
-
-```powershell
-npm run server
-```
-
-```powershell
-npm run dev
-```
-
-On startup, the API creates the tables from `server/schema.sql` if they do not exist. The frontend saves and loads each weekday's teammate names, work status, time-only break/return fields, completed and pending counts, the latest allocations, and the five most recent batches. Progress stays with the selected weekday until you use **Clear day** on the dashboard to reset it. Existing saved weekday rosters and cached order progress in browser storage are copied into PostgreSQL when that weekday does not yet have database data.
-
-The API health check is available at `http://localhost:3001/api/health`.
