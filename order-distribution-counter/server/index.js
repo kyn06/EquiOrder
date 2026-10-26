@@ -30,6 +30,7 @@ function sendJson(response, status, value) {
 function getRosterRows(rows) {
   return rows.map((row) => ({
     id: row.teammate_id,
+    rosterOrder: row.roster_order,
     name: row.name,
     status: row.status,
     breakStartTime: row.break_start_time,
@@ -97,9 +98,9 @@ async function handleRequest(request, response) {
 
   if (url.pathname === '/api/rosters' && request.method === 'GET') {
     const result = await pool.query(`
-      SELECT weekday, teammate_id, name, status, break_start_time, return_time
+      SELECT weekday, teammate_id, roster_order, name, status, break_start_time, return_time
       FROM weekday_teammates
-      ORDER BY weekday, teammate_id
+      ORDER BY weekday, roster_order, teammate_id
     `)
     const rosters = {}
     for (const row of result.rows) {
@@ -145,14 +146,15 @@ async function handleRequest(request, response) {
         [weekday],
       )
       await client.query('DELETE FROM weekday_teammates WHERE weekday = $1', [weekday])
-      for (const teammate of body.roster) {
+      for (const [rosterOrder, teammate] of body.roster.entries()) {
         await client.query(
           `INSERT INTO weekday_teammates
-            (weekday, teammate_id, name, status, break_start_time, return_time)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
+            (weekday, teammate_id, roster_order, name, status, break_start_time, return_time)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [
             weekday,
             teammate.id,
+            rosterOrder,
             teammate.name.trim(),
             teammate.status,
             teammate.breakStartTime ?? '',

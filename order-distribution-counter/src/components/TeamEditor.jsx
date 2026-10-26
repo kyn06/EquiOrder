@@ -1,3 +1,5 @@
+import { useLayoutEffect, useRef, useState } from 'react'
+
 function TeamEditor({
   team,
   selectedDay,
@@ -9,6 +11,7 @@ function TeamEditor({
   copyPasteMessage,
   onAddTeamMember,
   onRemoveTeamMember,
+  onReorderTeamMember,
   onDaySelect,
   onSaveDay,
   onCopyTeam,
@@ -18,11 +21,65 @@ function TeamEditor({
   onBreakTimeChange,
   onStatusChange,
 }) {
-  const orderedTeam = [...team].sort((first, second) => {
-    if (!first.breakStartTime) return second.breakStartTime ? 1 : 0
-    if (!second.breakStartTime) return -1
-    return first.breakStartTime.localeCompare(second.breakStartTime)
-  })
+  const draggedTeamMemberId = useRef(null)
+  const [dragOverTeamMemberId, setDragOverTeamMemberId] = useState(null)
+  const [draggingTeamMemberId, setDraggingTeamMemberId] = useState(null)
+  const teamMemberRows = useRef(new Map())
+  const rowPositionsBeforeDrop = useRef(null)
+  const animateReorderAfterDrop = useRef(false)
+
+  useLayoutEffect(() => {
+    if (!animateReorderAfterDrop.current) return
+
+    animateReorderAfterDrop.current = false
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+
+    teamMemberRows.current.forEach((row, id) => {
+      const oldTop = rowPositionsBeforeDrop.current?.get(id)
+      if (oldTop === undefined) return
+
+      const offsetY = oldTop - row.getBoundingClientRect().top
+      if (offsetY === 0) return
+
+      row.animate(
+        [
+          { transform: `translateY(${offsetY}px)` },
+          { transform: 'translateY(0)' },
+        ],
+        { duration: 220, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
+      )
+    })
+    rowPositionsBeforeDrop.current = null
+  }, [team])
+
+  function handleTeamMemberDragStart(event, id) {
+    draggedTeamMemberId.current = id
+    setDraggingTeamMemberId(id)
+    rowPositionsBeforeDrop.current = new Map(
+      [...teamMemberRows.current].map(([rowId, row]) => [
+        rowId,
+        row.getBoundingClientRect().top,
+      ]),
+    )
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', String(id))
+    const row = event.currentTarget
+    event.dataTransfer.setDragImage(row, row.offsetWidth / 2, row.offsetHeight / 2)
+  }
+
+  function handleTeamMemberDrop(event, targetId) {
+    event.preventDefault()
+    const sourceId = draggedTeamMemberId.current ?? Number(event.dataTransfer.getData('text/plain'))
+    if (sourceId && sourceId !== targetId) {
+      animateReorderAfterDrop.current = true
+      onReorderTeamMember(sourceId, targetId)
+    } else {
+      rowPositionsBeforeDrop.current = null
+    }
+    draggedTeamMemberId.current = null
+    setDraggingTeamMemberId(null)
+    setDragOverTeamMemberId(null)
+  }
 
   return (
     <div className="space-y-8">
@@ -47,7 +104,7 @@ function TeamEditor({
               Roster weekday
             </label>
             <p className="-mt-1 text-xs leading-5 text-slate-600">
-              Save stores names, status, and EST break times; order counts stay session-only.
+              Save stores names, status, break times, and custom teammate order; order counts stay session-only.
             </p>
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <select
@@ -108,7 +165,7 @@ function TeamEditor({
             Teammate details
           </h3>
           <p className="mt-1 text-sm text-slate-600">
-            Sorted by break start time, earliest to latest. Unscheduled breaks appear last.
+            Drag teammates to set your custom order. The top teammate appears first on the dashboard.
           </p>
         </div>
 
@@ -116,6 +173,7 @@ function TeamEditor({
           <table className="w-full min-w-250 text-left text-sm">
             <thead>
               <tr className="border-b border-white/90 text-xs font-extrabold uppercase tracking-wide text-slate-600">
+                <th className="w-16 px-2 py-2.5 text-center">Order</th>
                 <th className="w-42 px-3 py-2.5">Name</th>
                 <th className="w-32 px-2 py-2.5 text-center">Status</th>
                 <th className="w-30 px-2 py-2.5 text-center">Completed</th>
@@ -125,11 +183,55 @@ function TeamEditor({
               </tr>
             </thead>
             <tbody>
-              {orderedTeam.map((person) => (
+              {team.map((person) => (
                 <tr
                   key={person.id}
-                  className="border-b border-white/80 transition-colors last:border-0 hover:bg-white/25"
+                  ref={(row) => {
+                    if (row) teamMemberRows.current.set(person.id, row)
+                    else teamMemberRows.current.delete(person.id)
+                  }}
+                  draggable
+                  aria-label={`Drag ${person.name || 'teammate'} to reorder`}
+                  onDragStart={(event) => handleTeamMemberDragStart(event, person.id)}
+                  onDragEnd={() => {
+                    draggedTeamMemberId.current = null
+                    setDraggingTeamMemberId(null)
+                    setDragOverTeamMemberId(null)
+                    if (!animateReorderAfterDrop.current) rowPositionsBeforeDrop.current = null
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault()
+                    event.dataTransfer.dropEffect = 'move'
+                    setDragOverTeamMemberId(person.id)
+                  }}
+                  onDragLeave={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget)) {
+                      setDragOverTeamMemberId(null)
+                    }
+                  }}
+                  onDrop={(event) => handleTeamMemberDrop(event, person.id)}
+                  className={`team-roster-row border-b border-white/80 transition-colors last:border-0 hover:bg-white/25 ${
+                    draggingTeamMemberId === person.id ? 'team-roster-row-dragging' : ''
+                  } ${
+                    dragOverTeamMemberId === person.id
+                      ? 'team-roster-row-drop-target'
+                      : ''
+                  }`}
                 >
+                  <td className="px-2 py-2.5 text-center">
+                    <div className="flex items-center justify-center">
+                      <span aria-hidden="true" className="grid size-11 place-items-center text-slate-500">
+                        <svg viewBox="0 0 20 20" className="size-5 fill-current">
+                          <circle cx="7" cy="4" r="1.5" />
+                          <circle cx="13" cy="4" r="1.5" />
+                          <circle cx="7" cy="10" r="1.5" />
+                          <circle cx="13" cy="10" r="1.5" />
+                          <circle cx="7" cy="16" r="1.5" />
+                          <circle cx="13" cy="16" r="1.5" />
+                        </svg>
+                      </span>
+                    </div>
+                  </td>
                   <td className="px-3 py-2.5">
                     <div className="flex min-w-52 items-center gap-2">
                       <button

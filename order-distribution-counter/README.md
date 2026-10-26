@@ -17,7 +17,7 @@ Choose **Notes** in the main navigation to generate Sales messages and CRM logs 
 
 ## Manage weekday rosters
 
-Use **Manage team** to select a weekday and configure that day's roster. Add teammates with **Add teammate**, remove them with the **X** beside their name, and edit names, status, completed and pending counts, and manual break and return times. Time fields are time-only and intended for EST.
+Use **Manage team** to select a weekday and configure that day's roster. Drag teammates by the grip handle to set the custom order shown on the dashboard, then select **Save day** to keep it. Add teammates with **Add teammate**, remove them with the **X** beside their name, and edit names, status, completed and pending counts, and manual break and return times. Time fields are time-only and intended for EST.
 
 Select **Save day** to save the weekday's roster. SweetAlert2 asks for confirmation before a teammate is removed.
 

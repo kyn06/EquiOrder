@@ -1,10 +1,29 @@
+import { useState } from 'react'
+
 function TeamTable({ team, allocations }) {
-  const orderedTeam = allocations
-    ? [...team].sort(
-        (first, second) =>
-          (allocations[second.id] ?? 0) - (allocations[first.id] ?? 0),
-      )
-    : team
+  const [sortBy, setSortBy] = useState(null)
+  const [sortDirection, setSortDirection] = useState('desc')
+  const activeSort = sortBy ?? (allocations ? 'allocation' : 'custom')
+  const orderedTeam = [...team].sort((first, second) => {
+    if (activeSort === 'custom') return 0
+
+    let comparison = 0
+    if (activeSort === 'name') {
+      comparison = (first.name || '').localeCompare(second.name || '', undefined, {
+        sensitivity: 'base',
+        numeric: true,
+      })
+    } else if (activeSort === 'status') {
+      comparison = first.status.localeCompare(second.status)
+    } else if (activeSort === 'completed' || activeSort === 'pending') {
+      comparison = Number(first[activeSort] || 0) - Number(second[activeSort] || 0)
+    } else if (activeSort === 'allocation') {
+      comparison = (allocations?.[first.id] ?? 0) - (allocations?.[second.id] ?? 0)
+    }
+
+    return (sortDirection === 'asc' ? comparison : -comparison) ||
+      team.indexOf(first) - team.indexOf(second)
+  })
 
   return (
     <section className="overflow-hidden rounded-[30px] border border-white/90 bg-[#eaf2fc] neo-raised">
@@ -14,16 +33,50 @@ function TeamTable({ team, allocations }) {
             Team members
           </h3>
           <p className="mt-1 text-sm text-slate-600">
-            After each batch, sorted by new allocation from highest to lowest.
+            {activeSort === 'custom'
+              ? 'Showing teammates in your roster order.'
+              : `Sorted by ${activeSort === 'allocation' ? 'new allocation' : activeSort}, ${sortDirection === 'asc' ? 'ascending' : 'descending'}.`}
           </p>
         </div>
-        <div className="flex gap-2 text-xs font-semibold">
-          <span className="rounded-full border border-white/90 bg-[#eaf2fc] px-3 py-1.5 text-green-800 neo-raised-sm">
-            {team.filter((person) => person.status === 'working').length} working
-          </span>
-          <span className="rounded-full border border-white/90 bg-[#eaf2fc] px-3 py-1.5 text-amber-800 neo-raised-sm">
-            {team.filter((person) => person.status === 'break').length} on break
-          </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex min-h-11 items-center gap-2 rounded-xl border border-white/90 bg-[#eaf2fc] px-3 text-xs font-bold text-slate-700 neo-inset">
+            <span>Sort</span>
+            <select
+              aria-label="Sort team members by"
+              value={activeSort}
+              onChange={(event) => setSortBy(event.target.value)}
+              className="team-sort-select min-h-10 bg-transparent text-sm font-semibold"
+            >
+              <option value="custom">Custom order</option>
+              <option value="name">Name</option>
+              <option value="status">Status</option>
+              <option value="completed">Completed</option>
+              <option value="pending">Pending</option>
+              <option value="allocation">New allocation</option>
+            </select>
+          </label>
+          {activeSort !== 'custom' && (
+            <label className="flex min-h-11 items-center gap-2 rounded-xl border border-white/90 bg-[#eaf2fc] px-3 text-xs font-bold text-slate-700 neo-inset">
+              <span>Order</span>
+              <select
+                aria-label="Sort direction"
+                value={sortDirection}
+                onChange={(event) => setSortDirection(event.target.value)}
+                className="team-sort-select min-h-10 bg-transparent text-sm font-semibold"
+              >
+                <option value="asc">Ascending</option>
+                <option value="desc">Descending</option>
+              </select>
+            </label>
+          )}
+          <div className="flex gap-2 text-xs font-semibold">
+            <span className="rounded-full border border-white/90 bg-[#eaf2fc] px-3 py-1.5 text-green-800 neo-raised-sm">
+              {team.filter((person) => person.status === 'working').length} working
+            </span>
+            <span className="rounded-full border border-white/90 bg-[#eaf2fc] px-3 py-1.5 text-amber-800 neo-raised-sm">
+              {team.filter((person) => person.status === 'break').length} on break
+            </span>
+          </div>
         </div>
       </div>
 

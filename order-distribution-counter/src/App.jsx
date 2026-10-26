@@ -886,6 +886,20 @@ function App() {
     setRosterSaved(false)
   }
 
+  function handleReorderTeamMember(sourceId, targetId) {
+    const sourceIndex = team.findIndex((person) => person.id === sourceId)
+    const targetIndex = team.findIndex((person) => person.id === targetId)
+    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return
+
+    clearDistributionActions()
+    const reorderedTeam = [...team]
+    const [movedPerson] = reorderedTeam.splice(sourceIndex, 1)
+    reorderedTeam.splice(targetIndex, 0, movedPerson)
+    setTeam(reorderedTeam)
+    setRosterSaved(false)
+    setSaveError('')
+  }
+
   async function handleRemoveTeamMember(id) {
     if (team.length <= 1) return
 
@@ -1163,6 +1177,7 @@ function App() {
             copyPasteMessage={copyPasteMessage}
             onAddTeamMember={handleAddTeamMember}
             onRemoveTeamMember={handleRemoveTeamMember}
+            onReorderTeamMember={handleReorderTeamMember}
             onDaySelect={selectDay}
             onSaveDay={saveCurrentDay}
             onCopyTeam={copyCurrentTeam}
