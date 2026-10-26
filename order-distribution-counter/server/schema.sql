@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS public.weekday_teammates (
     REFERENCES public.weekday_rosters(weekday) ON DELETE CASCADE,
   teammate_id integer NOT NULL CHECK (teammate_id > 0),
   roster_order integer NOT NULL DEFAULT 0,
+  completed_orders bigint NOT NULL DEFAULT 0 CHECK (completed_orders >= 0),
+  pending_orders bigint NOT NULL DEFAULT 0 CHECK (pending_orders >= 0),
   name text NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 100),
   status text NOT NULL CHECK (status IN ('working', 'break')),
   break_start_time text NOT NULL DEFAULT '' CHECK (
@@ -29,6 +31,10 @@ CREATE TABLE IF NOT EXISTS public.weekday_teammates (
 
 ALTER TABLE public.weekday_teammates
   ADD COLUMN IF NOT EXISTS roster_order integer NOT NULL DEFAULT 0;
+
+ALTER TABLE public.weekday_teammates
+  ADD COLUMN IF NOT EXISTS completed_orders bigint NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS pending_orders bigint NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS public.weekday_order_progress (
   weekday text PRIMARY KEY CHECK (

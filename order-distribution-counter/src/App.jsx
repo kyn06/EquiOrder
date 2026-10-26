@@ -232,8 +232,8 @@ function hydrateDayRoster(roster, progress = null) {
     id: Number.isSafeInteger(person.id) ? person.id : index + 1,
     name: typeof person.name === 'string' ? person.name : `Teammate ${index + 1}`,
     status: person.status === 'break' ? 'break' : 'working',
-    completed: orderCounts.get(person.id)?.completed ?? 0,
-    pending: orderCounts.get(person.id)?.pending ?? 0,
+    completed: orderCounts.get(person.id)?.completed ?? person.completed ?? 0,
+    pending: orderCounts.get(person.id)?.pending ?? person.pending ?? 0,
     breakStartTime: person.breakStartTime ?? '',
     returnTime: person.returnTime ?? '',
   }))
@@ -813,10 +813,12 @@ function App() {
   }
 
   async function saveCurrentDay() {
-    const roster = team.map(({ id, name, status, breakStartTime, returnTime }) => ({
+    const roster = team.map(({ id, name, status, completed, pending, breakStartTime, returnTime }) => ({
       id,
       name,
       status,
+      completed,
+      pending,
       breakStartTime,
       returnTime,
     }))

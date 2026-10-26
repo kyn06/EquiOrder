@@ -104,7 +104,7 @@ function TeamEditor({
               Roster weekday
             </label>
             <p className="-mt-1 text-xs leading-5 text-slate-600">
-              Save stores names, status, break times, and custom teammate order; order counts stay session-only.
+              Save stores names, status, break times, custom order, and completed/pending counts.
             </p>
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <select

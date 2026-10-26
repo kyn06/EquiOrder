@@ -29,7 +29,7 @@ Completed and pending counts, the latest allocations, and the ten most recent ba
 
 ## Data storage
 
-The app uses a PostgreSQL API. Weekday rosters are stored separately from order progress, so clearing progress does not delete teammates or break times. Existing weekday rosters and cached progress in browser storage are imported when that weekday has no saved database data.
+The app uses a PostgreSQL API. Each weekday's roster stores teammate details, custom order, and completed/pending counts. Order progress also keeps those counts with allocations and recent batches, and the API keeps both copies in sync. Clearing progress resets counts while preserving teammate details. Existing weekday rosters and cached progress in browser storage are imported when that weekday has no saved database data.
 
 The database tables are created from [`server/schema.sql`](server/schema.sql) when the API starts. Configure `DATABASE_URL` in a local `.env` file based on [`.env.example`](.env.example). Keep `.env` private.
 

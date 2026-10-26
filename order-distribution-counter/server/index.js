@@ -34,6 +34,8 @@ function getRosterRows(rows) {
   return rows.map((row) => ({
     id: row.teammate_id,
     rosterOrder: row.roster_order,
+    completed: Number(row.completed_orders),
+    pending: Number(row.pending_orders),
     name: row.name,
     status: row.status,
     breakStartTime: row.break_start_time,
@@ -89,6 +91,15 @@ function validateRoster(roster) {
       return 'Teammate names must contain 1 to 100 characters.'
     }
 
+    for (const key of ['completed', 'pending']) {
+      if (
+        teammate[key] !== undefined &&
+        (!Number.isSafeInteger(teammate[key]) || teammate[key] < 0)
+      ) {
+        return 'Completed and pending counts must be non-negative integers.'
+      }
+    }
+
     if (teammate.status !== 'working' && teammate.status !== 'break') {
       return 'Teammate status must be working or break.'
     }
@@ -133,8 +144,8 @@ async function handleRequest(request, response) {
 
   if (url.pathname === '/api/rosters' && request.method === 'GET') {
     const result = await pool.query(`
-      SELECT weekday, teammate_id, roster_order, name, status,
-             break_start_time, return_time
+      SELECT weekday, teammate_id, roster_order, completed_orders,
+             pending_orders, name, status, break_start_time, return_time
       FROM public.weekday_teammates
       ORDER BY weekday, roster_order, teammate_id
     `)
@@ -203,13 +214,15 @@ async function handleRequest(request, response) {
       for (const [rosterOrder, teammate] of body.roster.entries()) {
         await client.query(
           `INSERT INTO public.weekday_teammates
-            (weekday, teammate_id, roster_order, name, status,
-             break_start_time, return_time)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            (weekday, teammate_id, roster_order, completed_orders,
+             pending_orders, name, status, break_start_time, return_time)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
           [
             weekday,
             teammate.id,
             rosterOrder,
+            teammate.completed ?? 0,
+            teammate.pending ?? 0,
             teammate.name.trim(),
             teammate.status,
             teammate.breakStartTime ?? '',
@@ -241,10 +254,26 @@ async function handleRequest(request, response) {
     }
 
     if (request.method === 'DELETE') {
-      await pool.query(
-        'DELETE FROM public.weekday_order_progress WHERE weekday = $1',
-        [weekday],
-      )
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        await client.query(
+          'DELETE FROM public.weekday_order_progress WHERE weekday = $1',
+          [weekday],
+        )
+        await client.query(
+          `UPDATE public.weekday_teammates
+           SET completed_orders = 0, pending_orders = 0
+           WHERE weekday = $1`,
+          [weekday],
+        )
+        await client.query('COMMIT')
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      } finally {
+        client.release()
+      }
       return sendJson(response, 200, { weekday, cleared: true })
     }
 
@@ -340,27 +369,49 @@ async function handleRequest(request, response) {
         }
       }
 
-      const result = await pool.query(
-        `INSERT INTO public.weekday_order_progress
-          (weekday, teammates, new_allocations, recent_batches, updated_at)
-         VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb,
-                 COALESCE($5::timestamptz, now()))
-         ON CONFLICT (weekday) DO UPDATE SET
-           teammates = EXCLUDED.teammates,
-           new_allocations = EXCLUDED.new_allocations,
-           recent_batches = EXCLUDED.recent_batches,
-           updated_at = GREATEST(
-             now(), COALESCE(EXCLUDED.updated_at, now())
+      const client = await pool.connect()
+      let result
+      try {
+        await client.query('BEGIN')
+        result = await client.query(
+          `INSERT INTO public.weekday_order_progress
+            (weekday, teammates, new_allocations, recent_batches, updated_at)
+           VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb,
+                   COALESCE($5::timestamptz, now()))
+           ON CONFLICT (weekday) DO UPDATE SET
+             teammates = EXCLUDED.teammates,
+             new_allocations = EXCLUDED.new_allocations,
+             recent_batches = EXCLUDED.recent_batches,
+             updated_at = GREATEST(
+               now(), COALESCE(EXCLUDED.updated_at, now())
+             )
+           RETURNING updated_at`,
+          [
+            weekday,
+            JSON.stringify(progress.teammates),
+            JSON.stringify(progress.allocations),
+            JSON.stringify(progress.recentBatches),
+            progress.updatedAt ?? null,
+          ],
+        )
+        await client.query(
+          `UPDATE public.weekday_teammates AS roster
+           SET completed_orders = counts.completed,
+               pending_orders = counts.pending
+           FROM jsonb_to_recordset($2::jsonb) AS counts(
+             id integer, completed bigint, pending bigint
            )
-         RETURNING updated_at`,
-        [
-          weekday,
-          JSON.stringify(progress.teammates),
-          JSON.stringify(progress.allocations),
-          JSON.stringify(progress.recentBatches),
-          progress.updatedAt ?? null,
-        ],
-      )
+           WHERE roster.weekday = $1
+             AND roster.teammate_id = counts.id`,
+          [weekday, JSON.stringify(progress.teammates)],
+        )
+        await client.query('COMMIT')
+      } catch (error) {
+        await client.query('ROLLBACK')
+        throw error
+      } finally {
+        client.release()
+      }
 
       return sendJson(response, 200, {
         weekday,
