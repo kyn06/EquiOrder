@@ -1,9 +1,9 @@
 import { useState } from 'react'
 
-function TeamTable({ team, allocations }) {
-  const [sortBy, setSortBy] = useState(null)
+function TeamTable({ team, allocations, onOrderCountChange }) {
+  const [sortBy, setSortBy] = useState('custom')
   const [sortDirection, setSortDirection] = useState('desc')
-  const activeSort = sortBy ?? (allocations ? 'allocation' : 'custom')
+  const activeSort = sortBy
   const orderedTeam = [...team].sort((first, second) => {
     if (activeSort === 'custom') return 0
 
@@ -128,8 +128,21 @@ function TeamTable({ team, allocations }) {
                     {person.status === 'working' ? 'Working' : 'On break'}
                   </span>
                 </td>
-                <td className="w-32 px-4 py-3.5 text-center font-semibold tabular-nums text-[#254779]">
-                  {person.completed}
+                <td className="w-32 px-4 py-3.5 text-center">
+                  <label htmlFor={`dashboard-completed-${person.id}`} className="sr-only">
+                    Orders completed by {person.name}
+                  </label>
+                  <input
+                    id={`dashboard-completed-${person.id}`}
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={person.completed}
+                    onChange={(event) =>
+                      onOrderCountChange(person.id, 'completed', event.target.value)
+                    }
+                    className="mx-auto block min-h-10 w-24 rounded-xl border border-white/90 bg-[#eaf2fc] px-2 py-2 text-center font-semibold tabular-nums text-[#254779] outline-none neo-inset focus-visible:ring-4 focus-visible:ring-blue-200"
+                  />
                 </td>
                 <td className="w-32 px-4 py-3.5 text-center font-semibold tabular-nums text-[#254779]">
                   {person.pending}

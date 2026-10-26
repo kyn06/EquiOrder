@@ -69,6 +69,7 @@ const initialTeam = [
 const dailyRosterStorageKey = 'equiorder-daily-rosters-v1'
 const dailyProgressStorageKey = 'equiorder-daily-progress-v1'
 const selectedWeekdayStorageKey = 'equiorder-selected-weekday-v1'
+const activePageStorageKey = 'equiorder-active-page-v1'
 const distributionActionsStorageKey = 'equiorder-distribution-actions-v1'
 const maxDistributionUndoSteps = 20
 const weekdays = [
@@ -111,6 +112,21 @@ function getInitialSelectedDay() {
   }
 
   return getEasternWeekday()
+}
+
+function getInitialActivePage() {
+  if (typeof window !== 'undefined') {
+    try {
+      const savedPage = window.localStorage.getItem(activePageStorageKey)
+      if (['dashboard', 'team', 'notes'].includes(savedPage)) {
+        return savedPage
+      }
+    } catch {
+      // Fall back to the dashboard when browser storage is unavailable.
+    }
+  }
+
+  return 'dashboard'
 }
 
 function readDailyRosters() {
@@ -293,7 +309,7 @@ function App() {
         )
       : initialTeam,
   )
-  const [activePage, setActivePage] = useState('dashboard')
+  const [activePage, setActivePage] = useState(getInitialActivePage)
   const [rosterSaved, setRosterSaved] = useState(
     Boolean(savedRosters[selectedDay]),
   )
@@ -489,6 +505,14 @@ function App() {
       // Keep the selected weekday active for this session if storage is unavailable.
     }
   }, [selectedDay])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(activePageStorageKey, activePage)
+    } catch {
+      // Keep the selected page active for this session if storage is unavailable.
+    }
+  }, [activePage])
 
   useEffect(() => {
     let cancelled = false
@@ -1164,6 +1188,7 @@ function App() {
               <TeamTable
                 team={team}
                 allocations={allocations}
+                onOrderCountChange={updateOrderCount}
               />
             </div>
           </>
