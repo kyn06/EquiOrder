@@ -5,15 +5,25 @@ function TeamEditor({
   rosterSaved,
   saveError,
   isSaving,
+  hasCopiedRoster,
+  copyPasteMessage,
   onAddTeamMember,
   onRemoveTeamMember,
   onDaySelect,
   onSaveDay,
+  onCopyTeam,
+  onPasteTeam,
   onNameChange,
   onOrderCountChange,
   onBreakTimeChange,
   onStatusChange,
 }) {
+  const orderedTeam = [...team].sort((first, second) => {
+    if (!first.breakStartTime) return second.breakStartTime ? 1 : 0
+    if (!second.breakStartTime) return -1
+    return first.breakStartTime.localeCompare(second.breakStartTime)
+  })
+
   return (
     <div className="space-y-8">
       <section className="rounded-[28px] border border-white/90 bg-[#eaf2fc] p-5 neo-raised sm:p-6">
@@ -39,12 +49,12 @@ function TeamEditor({
             <p className="-mt-1 text-xs leading-5 text-slate-600">
               Save stores names, status, and EST break times; order counts stay session-only.
             </p>
-            <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <select
                 id="roster-weekday"
                 value={selectedDay}
                 onChange={(event) => onDaySelect(event.target.value)}
-                className="min-h-12 min-w-0 flex-1 rounded-2xl border border-white/90 bg-[#eaf2fc] px-4 py-3 font-semibold text-[#102a5c] outline-none neo-inset focus-visible:ring-4 focus-visible:ring-blue-200"
+                className="min-h-12 min-w-0 flex-1 rounded-2xl border border-white/90 bg-[#eaf2fc] px-4 py-3 font-semibold text-[#102a5c] outline-none neo-inset focus-visible:ring-4 focus-visible:ring-blue-200 sm:basis-48"
               >
                 {weekdays.map((weekday) => (
                   <option key={weekday} value={weekday}>
@@ -54,9 +64,24 @@ function TeamEditor({
               </select>
               <button
                 type="button"
+                onClick={onCopyTeam}
+                className="button-secondary min-h-12 shrink-0 rounded-2xl px-4 py-3 text-sm font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
+              >
+                Copy team
+              </button>
+              <button
+                type="button"
+                onClick={onPasteTeam}
+                disabled={!hasCopiedRoster}
+                className="button-secondary min-h-12 shrink-0 rounded-2xl px-4 py-3 text-sm font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Paste team
+              </button>
+              <button
+                type="button"
                 onClick={onSaveDay}
                 disabled={isSaving}
-                className="min-h-12 shrink-0 rounded-2xl border border-blue-700 bg-blue-700 px-5 py-3 text-sm font-extrabold text-white transition-colors hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-wait disabled:opacity-60"
+                className="button-primary min-h-12 shrink-0 rounded-2xl px-5 py-3 text-sm font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-wait disabled:opacity-60"
               >
                 {isSaving ? 'Saving…' : 'Save day'}
               </button>
@@ -66,6 +91,9 @@ function TeamEditor({
                 (rosterSaved
                   ? `Saved for ${selectedDay}`
                   : 'Unsaved roster changes')}
+            </p>
+            <p aria-live="polite" className="min-h-5 text-xs font-medium text-slate-600">
+              {copyPasteMessage || 'Copy names, status, and break times to another weekday. Order counts stay with each day.'}
             </p>
           </div>
         </div>
@@ -79,27 +107,30 @@ function TeamEditor({
           <h3 className="mt-1 text-lg font-extrabold tracking-tight text-[#102a5c]">
             Teammate details
           </h3>
+          <p className="mt-1 text-sm text-slate-600">
+            Sorted by break start time, earliest to latest. Unscheduled breaks appear last.
+          </p>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-330 text-left text-sm">
+          <table className="w-full min-w-250 text-left text-sm">
             <thead>
               <tr className="border-b border-white/90 text-xs font-extrabold uppercase tracking-wide text-slate-600">
-                <th className="px-5 py-3.5">Name</th>
-                <th className="px-4 py-3.5">Status</th>
-                <th className="px-4 py-3.5 text-right">Completed</th>
-                <th className="px-4 py-3.5 text-right">Pending</th>
-                <th className="px-4 py-3.5">Break started (EST)</th>
-                <th className="px-5 py-3.5">Returned at (EST)</th>
+                <th className="w-42 px-3 py-2.5">Name</th>
+                <th className="w-32 px-2 py-2.5 text-center">Status</th>
+                <th className="w-30 px-2 py-2.5 text-center">Completed</th>
+                <th className="w-32 px-2 py-2.5 text-center">Pending</th>
+                <th className="w-25 px-2 py-2.5 text-center">Break started (EST)</th>
+                <th className="w-25 px-3 py-2.5 text-center">Returned at (EST)</th>
               </tr>
             </thead>
             <tbody>
-              {team.map((person) => (
+              {orderedTeam.map((person) => (
                 <tr
                   key={person.id}
                   className="border-b border-white/80 transition-colors last:border-0 hover:bg-white/25"
                 >
-                  <td className="px-5 py-3.5">
+                  <td className="px-3 py-2.5">
                     <div className="flex min-w-52 items-center gap-2">
                       <button
                         type="button"
@@ -111,7 +142,7 @@ function TeamEditor({
                             ? 'At least one teammate is required'
                             : `Remove ${person.name}`
                         }
-                        className="grid size-11 shrink-0 place-items-center rounded-xl border border-rose-200 bg-rose-50 text-lg font-bold leading-none text-rose-700 transition-colors hover:bg-rose-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="button-danger grid size-11 shrink-0 place-items-center rounded-xl text-lg font-bold leading-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         X
                       </button>
@@ -133,7 +164,7 @@ function TeamEditor({
                       />
                     </div>
                   </td>
-                  <td className="px-4 py-3.5">
+                  <td className="w-32 px-2 py-2.5">
                     <label
                       htmlFor={`status-${person.id}`}
                       className="sr-only"
@@ -152,7 +183,7 @@ function TeamEditor({
                       <option value="break">On break</option>
                     </select>
                   </td>
-                  <td className="px-4 py-3.5 text-right">
+                  <td className="w-32 px-2 py-2.5 text-center">
                     <label
                       htmlFor={`completed-${person.id}`}
                       className="sr-only"
@@ -172,10 +203,10 @@ function TeamEditor({
                           event.target.value,
                         )
                       }
-                      className="ml-auto block min-h-10 w-28 rounded-xl border border-white/90 bg-[#eaf2fc] px-3 py-2 text-right font-semibold tabular-nums text-[#102a5c] outline-none neo-inset focus-visible:ring-4 focus-visible:ring-blue-200"
+                      className="mx-auto block min-h-10 w-28 rounded-xl border border-white/90 bg-[#eaf2fc] px-3 py-2 text-center font-semibold tabular-nums text-[#102a5c] outline-none neo-inset focus-visible:ring-4 focus-visible:ring-blue-200"
                     />
                   </td>
-                  <td className="px-4 py-3.5 text-right">
+                  <td className="w-32 px-2 py-2.5 text-center">
                     <label
                       htmlFor={`pending-${person.id}`}
                       className="sr-only"
@@ -195,10 +226,10 @@ function TeamEditor({
                           event.target.value,
                         )
                       }
-                      className="ml-auto block min-h-10 w-28 rounded-xl border border-white/90 bg-[#eaf2fc] px-3 py-2 text-right font-semibold tabular-nums text-[#102a5c] outline-none neo-inset focus-visible:ring-4 focus-visible:ring-blue-200"
+                      className="mx-auto block min-h-10 w-28 rounded-xl border border-white/90 bg-[#eaf2fc] px-3 py-2 text-center font-semibold tabular-nums text-[#102a5c] outline-none neo-inset focus-visible:ring-4 focus-visible:ring-blue-200"
                     />
                   </td>
-                  <td className="px-4 py-3.5">
+                  <td className="px-2 py-2.5">
                     <label
                       htmlFor={`break-start-${person.id}`}
                       className="sr-only"
@@ -219,7 +250,7 @@ function TeamEditor({
                       className="min-h-10 w-40 rounded-xl border border-white/90 bg-[#eaf2fc] px-3 py-2 font-semibold text-[#102a5c] outline-none neo-inset focus-visible:ring-4 focus-visible:ring-blue-200"
                     />
                   </td>
-                  <td className="px-5 py-3.5">
+                  <td className="px-3 py-2.5">
                     <label
                       htmlFor={`returned-at-${person.id}`}
                       className="sr-only"
@@ -250,7 +281,7 @@ function TeamEditor({
             type="button"
             onClick={onAddTeamMember}
             disabled={team.length >= 100}
-            className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-blue-700 bg-blue-700 px-5 py-2.5 text-sm font-extrabold text-white transition-colors hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="button-primary inline-flex min-h-11 items-center gap-2 rounded-2xl px-5 py-2.5 text-sm font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span aria-hidden="true" className="text-lg leading-none">+</span>
             Add teammate

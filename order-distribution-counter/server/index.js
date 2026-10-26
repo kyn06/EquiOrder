@@ -108,7 +108,7 @@ async function handleRequest(request, response) {
     }
 
     const progressResult = await pool.query(`
-      SELECT weekday, teammates, new_allocations, recent_batches
+      SELECT weekday, teammates, new_allocations, recent_batches, updated_at
       FROM weekday_order_progress
     `)
     const progress = Object.fromEntries(
@@ -116,6 +116,7 @@ async function handleRequest(request, response) {
         teammates: row.teammates,
         allocations: row.new_allocations,
         recentBatches: row.recent_batches,
+        updatedAt: new Date(row.updated_at).toISOString(),
       }]),
     )
 
@@ -205,8 +206,15 @@ async function handleRequest(request, response) {
         teammateIds.add(teammate.id)
       }
 
-      if (!Array.isArray(progress.recentBatches) || progress.recentBatches.length > 5) {
-        return sendJson(response, 400, { error: 'Recent batch history can contain up to 5 batches.' })
+      if (!Array.isArray(progress.recentBatches) || progress.recentBatches.length > 10) {
+        return sendJson(response, 400, { error: 'Recent batch history can contain up to 10 batches.' })
+      }
+
+      if (
+        progress.updatedAt !== undefined &&
+        (typeof progress.updatedAt !== 'string' || !Number.isFinite(Date.parse(progress.updatedAt)))
+      ) {
+        return sendJson(response, 400, { error: 'Progress update time must be a valid timestamp.' })
       }
 
       const allocations = progress.allocations
@@ -238,23 +246,31 @@ async function handleRequest(request, response) {
         }
       }
 
-      await pool.query(
+      const result = await pool.query(
         `INSERT INTO weekday_order_progress
           (weekday, teammates, new_allocations, recent_batches, updated_at)
-         VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb, now())
+         VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb, COALESCE($5::timestamptz, now()))
          ON CONFLICT (weekday) DO UPDATE SET
            teammates = EXCLUDED.teammates,
            new_allocations = EXCLUDED.new_allocations,
            recent_batches = EXCLUDED.recent_batches,
-           updated_at = now()`,
+           updated_at = GREATEST(now(), COALESCE(EXCLUDED.updated_at, now()))
+         RETURNING updated_at`,
         [
           weekday,
           JSON.stringify(progress.teammates),
           JSON.stringify(progress.allocations),
           JSON.stringify(progress.recentBatches),
+          progress.updatedAt ?? null,
         ],
       )
-      return sendJson(response, 200, { weekday, progress })
+      return sendJson(response, 200, {
+        weekday,
+        progress: {
+          ...progress,
+          updatedAt: new Date(result.rows[0].updated_at).toISOString(),
+        },
+      })
     }
   }
 

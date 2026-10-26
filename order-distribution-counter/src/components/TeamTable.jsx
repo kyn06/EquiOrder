@@ -1,4 +1,11 @@
 function TeamTable({ team, allocations }) {
+  const orderedTeam = allocations
+    ? [...team].sort(
+        (first, second) =>
+          (allocations[second.id] ?? 0) - (allocations[first.id] ?? 0),
+      )
+    : team
+
   return (
     <section className="overflow-hidden rounded-[30px] border border-white/90 bg-[#eaf2fc] neo-raised">
       <div className="flex flex-col gap-3 border-b border-white/90 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
@@ -7,7 +14,7 @@ function TeamTable({ team, allocations }) {
             Team members
           </h3>
           <p className="mt-1 text-sm text-slate-600">
-            Review workloads and update availability.
+            After each batch, sorted by new allocation from highest to lowest.
           </p>
         </div>
         <div className="flex gap-2 text-xs font-semibold">
@@ -24,30 +31,33 @@ function TeamTable({ team, allocations }) {
         <table className="w-full min-w-190 text-left text-sm">
           <thead>
             <tr className="border-b border-white/90 text-xs font-extrabold uppercase tracking-wide text-slate-600">
-              <th className="px-5 py-3.5">Teammate</th>
-              <th className="px-4 py-3.5">Status</th>
-              <th className="px-4 py-3.5 text-right">Completed</th>
-              <th className="px-4 py-3.5 text-right">Pending</th>
-              <th className="px-4 py-3.5 text-right">New allocation</th>
+              <th className="w-52 px-3 py-3.5">Teammate</th>
+              <th className="w-32 px-4 py-3.5">Status</th>
+              <th className="w-32 px-4 py-3.5 text-center">Completed</th>
+              <th className="w-32 px-4 py-3.5 text-center">Pending</th>
+              <th className="w-32 px-4 py-3.5 text-center">New allocation</th>
             </tr>
           </thead>
           <tbody>
-            {team.map((person) => (
+            {orderedTeam.map((person) => (
               <tr
                 key={person.id}
-                className="border-b border-white/80 transition-colors last:border-0 hover:bg-white/25"
+                className="team-member-row border-b border-white/80 transition-colors last:border-0 hover:bg-white/25"
               >
-                <td className="px-5 py-3.5">
-                  <div className="flex items-center gap-3">
+                <td className="w-52 max-w-52 px-3 py-3.5">
+                  <div className="flex min-w-0 items-center gap-2">
                     <span className="grid size-9 shrink-0 place-items-center rounded-full border border-white/90 bg-[#eaf2fc] text-xs font-extrabold text-blue-800 neo-raised-sm">
                       {person.name.trim().charAt(0).toUpperCase() || '?'}
                     </span>
-                    <span className="font-bold text-[#102a5c]">
+                    <span
+                      title={person.name || 'Unnamed teammate'}
+                      className="min-w-0 max-w-32 truncate font-bold text-[#102a5c]"
+                    >
                       {person.name || 'Unnamed teammate'}
                     </span>
                   </div>
                 </td>
-                <td className="px-4 py-3.5">
+                <td className="w-32 px-4 py-3.5">
                   <span
                     className={`inline-flex items-center gap-2 rounded-full border border-white/90 bg-[#eaf2fc] px-2.5 py-1.5 text-xs font-bold neo-raised-sm ${
                       person.status === 'working'
@@ -65,13 +75,13 @@ function TeamTable({ team, allocations }) {
                     {person.status === 'working' ? 'Working' : 'On break'}
                   </span>
                 </td>
-                <td className="px-4 py-3.5 text-right font-semibold tabular-nums text-[#254779]">
+                <td className="w-32 px-4 py-3.5 text-center font-semibold tabular-nums text-[#254779]">
                   {person.completed}
                 </td>
-                <td className="px-4 py-3.5 text-right font-semibold tabular-nums text-[#254779]">
+                <td className="w-32 px-4 py-3.5 text-center font-semibold tabular-nums text-[#254779]">
                   {person.pending}
                 </td>
-                <td className="px-4 py-3.5 text-right font-extrabold tabular-nums text-blue-800">
+                <td className="w-32 px-4 py-3.5 text-center font-extrabold tabular-nums text-blue-800">
                   {allocations && person.status === 'working'
                     ? allocations[person.id] ?? 0
                     : '—'}

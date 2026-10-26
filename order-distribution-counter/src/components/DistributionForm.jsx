@@ -6,11 +6,15 @@ function DistributionForm({
   onClearDay,
   onOrdersChange,
   onSubmit,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
   orders,
 }) {
   return (
-    <section className="rounded-[30px] border border-white/90 bg-[#eaf2fc] p-5 neo-raised sm:p-6">
-      <div>
+    <section className="flex h-full flex-col rounded-[30px] border border-white/90 bg-[#eaf2fc] p-5 neo-raised sm:p-6">
+      <div className="flex h-full flex-col">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h3 className="mt-1 text-xl font-extrabold tracking-tight text-[#102a5c]">
@@ -46,36 +50,58 @@ function DistributionForm({
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={activeCount === 0}
-            className="min-h-13 rounded-2xl border border-blue-300/70 bg-linear-to-br from-sky-400 to-blue-700 px-6 py-3 text-sm font-extrabold text-white shadow-none transition duration-150 hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Calculate distribution
-          </button>
+          <div className="flex flex-wrap gap-2 sm:shrink-0 xl:justify-end">
+            <button
+              type="submit"
+              disabled={activeCount === 0}
+              className="button-primary min-h-13 rounded-2xl px-6 py-3 text-sm font-extrabold shadow-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Calculate distribution
+            </button>
+            <button
+              type="button"
+              onClick={onUndo}
+              disabled={!canUndo}
+              aria-label="Undo last distribution"
+              title="Undo last distribution"
+              className="button-secondary min-h-13 rounded-xl px-4 py-2 text-sm font-bold neo-raised-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Undo
+            </button>
+            <button
+              type="button"
+              onClick={onRedo}
+              disabled={!canRedo}
+              aria-label="Redo last distribution"
+              title="Redo last distribution"
+              className="button-secondary min-h-13 rounded-xl px-4 py-2 text-sm font-bold neo-raised-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Redo
+            </button>
+          </div>
         </form>
 
-        <section className="mt-5 border-t border-white/80 pt-4">
+        <section className="mt-5 flex min-h-0 flex-1 flex-col border-t border-white/80 pt-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h4 className="text-sm font-extrabold text-[#102a5c]">
               Recent batches
             </h4>
             <div className="flex items-center gap-3">
               <span className="text-xs font-medium text-slate-500">
-                Latest {history.length} of 5
+                Latest {history.length} of 10
               </span>
               <button
                 type="button"
                 onClick={onClearDay}
                 aria-label={`Clear saved order progress for ${selectedDay}`}
-                className="min-h-11 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-extrabold text-rose-700 transition-colors hover:bg-rose-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600"
+                className="button-danger min-h-11 rounded-xl px-3 py-2 text-xs font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600"
               >
                 Clear day
               </button>
             </div>
           </div>
 
-          <div className="neo-inset mt-2 h-44 overflow-y-auto rounded-xl border border-white/80 bg-[#eaf2fc] p-2">
+          <div className="neo-inset mt-2 min-h-44 flex-1 overflow-y-auto rounded-xl border border-white/80 bg-[#eaf2fc] p-2">
             {history.length === 0 ? (
               <p className="grid h-full place-items-center text-sm text-slate-600">
                 No batches yet.

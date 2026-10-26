@@ -7,8 +7,13 @@ EquiOrder is a team order distribution dashboard. It helps a team share each inc
 - Shows the active roster, teammate availability, completed and pending orders, and the latest batch allocation.
 - Distributes incoming orders among teammates marked **Working**. Their pending orders are assigned first; remaining orders are divided evenly. Any remainder goes to teammates with the most pending orders.
 - Updates completed totals after each batch and recalculates pending orders so the team can catch up evenly.
-- Keeps the five most recent batches available on the dashboard.
+- Keeps the ten most recent batches available on the dashboard.
+- Provides a Notes page for standardized Sales messages, CRM logs, and quick-copy snippets.
 - Supports light and dark themes.
+
+## Notes page
+
+Choose **Notes** in the main navigation to generate Sales messages and CRM logs or copy a frequently used note. Outputs update as you fill in the fields; generated text is not stored in the database.
 
 ## Manage weekday rosters
 
@@ -20,7 +25,7 @@ The selected weekday is used by the dashboard until another weekday is selected.
 
 ## Daily order progress
 
-Completed and pending counts, the latest allocations, and the five most recent batches are saved for the selected weekday. Use **Clear day** on the dashboard to reset that weekday's order progress before starting fresh. A confirmation appears before clearing; the saved roster remains in place.
+Completed and pending counts, the latest allocations, and the ten most recent batches are saved for the selected weekday. Use **Clear day** on the dashboard to reset that weekday's order progress before starting fresh. A confirmation appears before clearing; the saved roster remains in place.
 
 ## Data storage
 

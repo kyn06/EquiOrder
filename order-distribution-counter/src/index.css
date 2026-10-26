@@ -1,11 +1,30 @@
 @import "tailwindcss";
 
 :root {
-  --page-bg: #eaf2fc;
-  --surface-bg: #eaf2fc;
-  --surface-border: rgba(255, 255, 255, 0.9);
+  --page-bg: #eee1cd;
+  --surface-bg: #f6ecdc;
+  --surface-border: rgba(255, 255, 255, 0.82);
   --text-primary: #102a5c;
   --text-secondary: #475569;
+  --shadow-raised-dark: rgba(132, 104, 69, 0.24);
+  --shadow-raised-light: rgba(255, 255, 255, 0.76);
+  --shadow-inset-dark: rgba(132, 104, 69, 0.18);
+  --shadow-inset-light: rgba(255, 255, 255, 0.82);
+  --action-primary-bg: #1d4ed8;
+  --action-primary-hover: #1e40af;
+  --action-primary-fg: #ffffff;
+  --action-primary-border: #1d4ed8;
+  --action-secondary-bg: #eaf2fc;
+  --action-secondary-hover: #dbeafe;
+  --action-secondary-fg: #1e40af;
+  --action-secondary-border: #93c5fd;
+  --action-danger-bg: #fff1f2;
+  --action-danger-hover: #ffe4e6;
+  --action-danger-fg: #be123c;
+  --action-danger-border: #fecdd3;
+  --team-row-odd: #f6ecdc;
+  --team-row-even: #e8d8bf;
+  --team-row-hover: #dfccb0;
 }
 
 .dark {
@@ -15,6 +34,21 @@
   --surface-border: rgba(184, 204, 232, 0.14);
   --text-primary: #e8f0ff;
   --text-secondary: #b6c4d9;
+  --action-primary-bg: #1d4ed8;
+  --action-primary-hover: #1e40af;
+  --action-primary-fg: #ffffff;
+  --action-primary-border: #3b82f6;
+  --action-secondary-bg: #243b5a;
+  --action-secondary-hover: #304966;
+  --action-secondary-fg: #c5ddfb;
+  --action-secondary-border: rgba(143, 194, 255, 0.38);
+  --action-danger-bg: #4c1d28;
+  --action-danger-hover: #5b2634;
+  --action-danger-fg: #fda4af;
+  --action-danger-border: #9f1239;
+  --team-row-odd: #1d2a3d;
+  --team-row-even: #26364d;
+  --team-row-hover: #31445e;
 }
 
 @layer base {
@@ -69,6 +103,10 @@
   --shadow-raised-light: rgba(56, 76, 104, 0.42);
   --shadow-inset-dark: rgba(8, 14, 24, 0.62);
   --shadow-inset-light: rgba(56, 76, 104, 0.36);
+}
+
+:root [class~="bg-[#eaf2fc]"] {
+  background-color: var(--surface-bg);
 }
 
 .dark [class~="bg-[#eaf2fc]"] {
@@ -168,6 +206,56 @@
 
 .dark .hover\:text-blue-950:hover {
   color: #8fc2ff;
+}
+
+.button-primary,
+.button-secondary,
+.button-danger {
+  border-width: 1px;
+  border-style: solid;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.button-primary {
+  border-color: var(--action-primary-border);
+  background-color: var(--action-primary-bg);
+  color: var(--action-primary-fg);
+}
+
+.button-primary:hover:not(:disabled) {
+  background-color: var(--action-primary-hover);
+}
+
+.button-secondary {
+  border-color: var(--action-secondary-border);
+  background-color: var(--action-secondary-bg);
+  color: var(--action-secondary-fg);
+}
+
+.button-secondary:hover:not(:disabled) {
+  background-color: var(--action-secondary-hover);
+}
+
+.button-danger {
+  border-color: var(--action-danger-border);
+  background-color: var(--action-danger-bg);
+  color: var(--action-danger-fg);
+}
+
+.button-danger:hover:not(:disabled) {
+  background-color: var(--action-danger-hover);
+}
+
+.team-member-row:nth-child(odd) {
+  background-color: var(--team-row-odd);
+}
+
+.team-member-row:nth-child(even) {
+  background-color: var(--team-row-even);
+}
+
+.team-member-row:hover {
+  background-color: var(--team-row-hover);
 }
 
 @media (prefers-reduced-motion: reduce) {

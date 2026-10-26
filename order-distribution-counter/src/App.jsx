@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import DistributionForm from './components/DistributionForm'
+import NotesPage from './components/NotesPage'
 import Sidebar from './components/Sidebar'
 import StatCard from './components/StatCard'
 import TeamEditor from './components/TeamEditor'
@@ -68,6 +69,8 @@ const initialTeam = [
 const dailyRosterStorageKey = 'equiorder-daily-rosters-v1'
 const dailyProgressStorageKey = 'equiorder-daily-progress-v1'
 const selectedWeekdayStorageKey = 'equiorder-selected-weekday-v1'
+const distributionActionsStorageKey = 'equiorder-distribution-actions-v1'
+const maxDistributionUndoSteps = 20
 const weekdays = [
   'Monday',
   'Tuesday',
@@ -83,6 +86,16 @@ function getEasternWeekday() {
     timeZone: 'America/New_York',
     weekday: 'long',
   }).format(new Date())
+}
+
+function formatEasternTime(date) {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZoneName: 'short',
+  }).format(date)
 }
 
 function getInitialSelectedDay() {
@@ -168,6 +181,48 @@ function cacheDailyProgress(progress) {
   }
 }
 
+function isDistributionSnapshot(snapshot) {
+  return Boolean(
+    snapshot &&
+      Array.isArray(snapshot.team) &&
+      (snapshot.allocations === null ||
+        (typeof snapshot.allocations === 'object' &&
+          !Array.isArray(snapshot.allocations))) &&
+      Array.isArray(snapshot.distributionHistory) &&
+      typeof snapshot.orders === 'string',
+  )
+}
+
+function readDistributionActions(day) {
+  if (typeof window === 'undefined') return { undo: [], redo: [] }
+
+  try {
+    const stored = window.localStorage.getItem(`${distributionActionsStorageKey}-${day}`)
+    const parsed = JSON.parse(stored || '{}')
+    return {
+      undo: Array.isArray(parsed.undo)
+        ? parsed.undo.filter(isDistributionSnapshot).slice(-maxDistributionUndoSteps)
+        : [],
+      redo: Array.isArray(parsed.redo)
+        ? parsed.redo.filter(isDistributionSnapshot).slice(-maxDistributionUndoSteps)
+        : [],
+    }
+  } catch {
+    return { undo: [], redo: [] }
+  }
+}
+
+function cacheDistributionActions(day, undo, redo) {
+  try {
+    window.localStorage.setItem(
+      `${distributionActionsStorageKey}-${day}`,
+      JSON.stringify({ undo, redo }),
+    )
+  } catch {
+    // Keep distribution undo history in memory when browser storage is unavailable.
+  }
+}
+
 function hydrateDayRoster(roster, progress = null) {
   const orderCounts = new Map(
     (progress?.teammates ?? []).map((person) => [person.id, person]),
@@ -223,11 +278,13 @@ function confirmDestructiveAction({ title, text, confirmButtonText }) {
 
 function App() {
   const [isDark, setIsDark] = useState(getInitialTheme)
+  const [easternTime, setEasternTime] = useState(() => formatEasternTime(new Date()))
   const [savedRosters, setSavedRosters] = useState(readDailyRosters)
   const [savedProgress, setSavedProgress] = useState(readDailyProgress)
   const savedProgressRef = useRef(savedProgress)
   const [selectedDay, setSelectedDay] = useState(getInitialSelectedDay)
   const selectedDayRef = useRef(selectedDay)
+  const breakAlertRef = useRef({ date: '', events: new Set() })
   const [team, setTeam] = useState(() =>
     savedRosters[selectedDay]
       ? hydrateDayRoster(
@@ -242,6 +299,8 @@ function App() {
   )
   const [saveError, setSaveError] = useState('')
   const [isSavingRoster, setIsSavingRoster] = useState(false)
+  const [copiedRoster, setCopiedRoster] = useState(null)
+  const [copyPasteMessage, setCopyPasteMessage] = useState('')
   const [apiConnected, setApiConnected] = useState(false)
   const [progressMessage, setProgressMessage] = useState('')
   const [orders, setOrders] = useState('')
@@ -251,6 +310,149 @@ function App() {
   const [distributionHistory, setDistributionHistory] = useState(
     () => savedProgress[selectedDay]?.recentBatches ?? [],
   )
+  const [distributionUndoStack, setDistributionUndoStack] = useState(
+    () => readDistributionActions(selectedDay).undo,
+  )
+  const [distributionRedoStack, setDistributionRedoStack] = useState(
+    () => readDistributionActions(selectedDay).redo,
+  )
+
+  useEffect(() => {
+    cacheDistributionActions(selectedDay, distributionUndoStack, distributionRedoStack)
+  }, [distributionRedoStack, distributionUndoStack, selectedDay])
+
+  useEffect(() => {
+    const clock = window.setInterval(() => {
+      setEasternTime(formatEasternTime(new Date()))
+    }, 1000)
+
+    return () => window.clearInterval(clock)
+  }, [])
+
+  useEffect(() => {
+    function applyScheduledStatuses() {
+      const now = new Date()
+      const currentWeekday = getEasternWeekday()
+      const currentDate = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(now)
+      if (breakAlertRef.current.date !== currentDate) {
+        breakAlertRef.current = { date: currentDate, events: new Set() }
+      }
+      const currentDayIsSelected = currentWeekday === selectedDay
+      const savedCurrentRoster = savedRosters[currentWeekday]
+      const scheduledRoster = currentDayIsSelected
+        ? team
+        : savedCurrentRoster
+      if (!scheduledRoster) return
+
+      const timeParts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+      }).formatToParts(now)
+      const currentMinute =
+        Number(timeParts.find((part) => part.type === 'hour')?.value ?? 0) * 60 +
+        Number(timeParts.find((part) => part.type === 'minute')?.value ?? 0)
+      const getScheduledMinute = (time) => {
+        if (!time) return null
+        const [hour, minute] = time.split(':').map(Number)
+        return hour * 60 + minute
+      }
+      const transitions = []
+      const updatedRoster = scheduledRoster.map((person) => {
+        const breakMinute = getScheduledMinute(person.breakStartTime)
+        const returnMinute = getScheduledMinute(person.returnTime)
+        const returnDue = returnMinute !== null && currentMinute >= returnMinute - 5
+
+        if (person.status === 'break' && returnDue) {
+          transitions.push({ id: person.id, name: person.name, status: 'working' })
+          return { ...person, status: 'working' }
+        }
+
+        const breakDue = breakMinute !== null && currentMinute >= breakMinute - 5
+        if (person.status === 'working' && breakDue && !returnDue) {
+          transitions.push({ id: person.id, name: person.name, status: 'break' })
+          return { ...person, status: 'break' }
+        }
+
+        return person
+      })
+
+      if (transitions.length === 0) return
+
+      if (currentDayIsSelected) {
+        const updatedTeam = team.map((person) => {
+          const transitioned = transitions.find((entry) => entry.id === person.id)
+          return transitioned ? { ...person, status: transitioned.status } : person
+        })
+        setTeam(updatedTeam)
+        setAllocations(null)
+        rememberProgress(selectedDay, updatedTeam, null, distributionHistory)
+      }
+      const transitionMessages = transitions.map(({ name, status }) =>
+        status === 'break' ? `${name} is now on break` : `${name} returned to work`,
+      )
+      setProgressMessage(
+        `${currentDayIsSelected ? '' : `${currentWeekday}: `}${transitionMessages.join('; ')} automatically 5 minutes before the scheduled time.`,
+      )
+
+      const newlyOnBreak = transitions.filter(({ id, status }) => {
+        if (status !== 'break') return false
+        const teammate = scheduledRoster.find((person) => person.id === id)
+        const eventKey = `${id}:${teammate?.breakStartTime ?? ''}`
+        if (breakAlertRef.current.events.has(eventKey)) return false
+        breakAlertRef.current.events.add(eventKey)
+        return true
+      })
+      if (newlyOnBreak.length > 0) {
+        const names = updatedRoster
+          .filter(({ status }) => status === 'break')
+          .map(({ name }) => name)
+        const isDark = document.documentElement.classList.contains('dark')
+        Swal.fire({
+          title: names.length === 1 ? `${names[0]} is on break` : 'Teammates on break',
+          text: `Currently on break: ${names.join(', ')}.`,
+          icon: 'info',
+          confirmButtonText: 'OK',
+          confirmButtonColor: isDark ? '#2563eb' : '#1d4ed8',
+          background: isDark ? '#172235' : '#eaf2fc',
+          color: isDark ? '#eaf2fc' : '#102a5c',
+        })
+      }
+
+      const canPersist = savedCurrentRoster && (!currentDayIsSelected || rosterSaved)
+      if (!canPersist) return
+
+      const updatedRosters = { ...savedRosters, [currentWeekday]: updatedRoster }
+      setSavedRosters(updatedRosters)
+      cacheDailyRosters(updatedRosters)
+      if (currentDayIsSelected) setRosterSaved(true)
+
+      if (apiConnected) {
+        fetch(`/api/rosters/${encodeURIComponent(currentWeekday)}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ roster: updatedRoster }),
+        }).then((response) => {
+          if (!response.ok) throw new Error('Could not save scheduled status.')
+        }).catch(() => {
+          setApiConnected(false)
+          setProgressMessage(
+            'Scheduled status changed and saved in this browser. PostgreSQL could not be reached.',
+          )
+        })
+      }
+    }
+
+    applyScheduledStatuses()
+    const schedule = window.setInterval(applyScheduledStatuses, 15_000)
+    return () => window.clearInterval(schedule)
+  }, [apiConnected, distributionHistory, rosterSaved, savedRosters, selectedDay, team])
 
   const activeCount = team.filter(
     (person) => person.status === 'working',
@@ -264,12 +466,13 @@ function App() {
     })),
     allocations,
     recentBatches: distributionHistory,
+    updatedAt: savedProgress[selectedDay]?.updatedAt ?? null,
   })
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark)
     document
       .querySelector('meta[name="theme-color"]')
-      ?.setAttribute('content', isDark ? '#172235' : '#eaf2fc')
+      ?.setAttribute('content', isDark ? '#172235' : '#eee1cd')
 
     try {
       window.localStorage.setItem('equiorder-theme', isDark ? 'dark' : 'light')
@@ -324,7 +527,23 @@ function App() {
         }
 
         for (const [weekday, progress] of Object.entries(cachedProgress)) {
-          if (!databaseProgress[weekday]) {
+          const databaseTimestamp = Date.parse(databaseProgress[weekday]?.updatedAt ?? '')
+          const cachedTimestamp = Date.parse(progress.updatedAt ?? '')
+          const cachedBatchTimestamp = Date.parse(
+            progress.recentBatches?.[0]?.completedAt ?? '',
+          )
+          const databaseBatchTimestamp = Date.parse(
+            databaseProgress[weekday]?.recentBatches?.[0]?.completedAt ?? '',
+          )
+          const cachedIsNewer = Number.isFinite(cachedTimestamp)
+            ? !Number.isFinite(databaseTimestamp) || cachedTimestamp > databaseTimestamp
+            : (Number.isFinite(cachedBatchTimestamp) &&
+                (!Number.isFinite(databaseBatchTimestamp) ||
+                  cachedBatchTimestamp > databaseBatchTimestamp)) ||
+              (progress.recentBatches?.length ?? 0) >
+                (databaseProgress[weekday]?.recentBatches?.length ?? 0)
+
+          if (!databaseProgress[weekday] || cachedIsNewer) {
             const migrationResponse = await fetch(
               `/api/progress/${encodeURIComponent(weekday)}`,
               {
@@ -339,7 +558,8 @@ function App() {
                 migrationResult.error || `Could not migrate ${weekday}'s order progress.`,
               )
             }
-            databaseProgress[weekday] = progress
+            const migrationResult = await migrationResponse.json()
+            databaseProgress[weekday] = migrationResult.progress ?? progress
           }
         }
 
@@ -415,6 +635,7 @@ function App() {
       })),
       allocations: allocationSnapshot,
       recentBatches: historySnapshot,
+      updatedAt: new Date().toISOString(),
     }
     const updated = { ...savedProgressRef.current, [day]: progress }
     savedProgressRef.current = updated
@@ -422,7 +643,57 @@ function App() {
     cacheDailyProgress(updated)
   }
 
+  function clearDistributionActions() {
+    setDistributionUndoStack([])
+    setDistributionRedoStack([])
+  }
+
+  function undoDistribution() {
+    if (distributionUndoStack.length === 0) return
+
+    const snapshot = distributionUndoStack[distributionUndoStack.length - 1]
+    const currentSnapshot = { team, allocations, distributionHistory, orders }
+    setDistributionUndoStack(distributionUndoStack.slice(0, -1))
+    setDistributionRedoStack((redoStack) => [
+      ...redoStack.slice(-(maxDistributionUndoSteps - 1)),
+      currentSnapshot,
+    ])
+    setTeam(snapshot.team)
+    setAllocations(snapshot.allocations)
+    setDistributionHistory(snapshot.distributionHistory)
+    setOrders(snapshot.orders)
+    rememberProgress(
+      selectedDay,
+      snapshot.team,
+      snapshot.allocations,
+      snapshot.distributionHistory,
+    )
+  }
+
+  function redoDistribution() {
+    if (distributionRedoStack.length === 0) return
+
+    const snapshot = distributionRedoStack[distributionRedoStack.length - 1]
+    const currentSnapshot = { team, allocations, distributionHistory, orders }
+    setDistributionRedoStack(distributionRedoStack.slice(0, -1))
+    setDistributionUndoStack((undoStack) => [
+      ...undoStack.slice(-(maxDistributionUndoSteps - 1)),
+      currentSnapshot,
+    ])
+    setTeam(snapshot.team)
+    setAllocations(snapshot.allocations)
+    setDistributionHistory(snapshot.distributionHistory)
+    setOrders(snapshot.orders)
+    rememberProgress(
+      selectedDay,
+      snapshot.team,
+      snapshot.allocations,
+      snapshot.distributionHistory,
+    )
+  }
+
   function updateTeamStatus(id, status) {
+    clearDistributionActions()
     const updatedTeam = team.map((person) =>
       person.id === id ? { ...person, status } : person,
     )
@@ -438,6 +709,8 @@ function App() {
     if (!Number.isSafeInteger(count) || count < 0) {
       return
     }
+
+    clearDistributionActions()
 
     let updatedTeam = team.map((person) =>
       person.id === id ? { ...person, [field]: count } : person,
@@ -459,6 +732,7 @@ function App() {
   }
 
   function updateTeamName(id, name) {
+    clearDistributionActions()
     const updatedTeam = team.map((person) =>
       person.id === id ? { ...person, name } : person,
     )
@@ -468,6 +742,7 @@ function App() {
   }
 
   function updateBreakTime(id, field, value) {
+    clearDistributionActions()
     const updatedTeam = team.map((person) =>
       person.id === id ? { ...person, [field]: value } : person,
     )
@@ -480,7 +755,41 @@ function App() {
     loadDay(day)
   }
 
+  function copyCurrentTeam() {
+    setCopiedRoster(team.map(({ id, name, status, breakStartTime, returnTime }) => ({
+      id,
+      name,
+      status,
+      breakStartTime,
+      returnTime,
+    })))
+    setCopyPasteMessage(`Copied the ${selectedDay} team. Select another weekday and paste it.`)
+  }
+
+  function pasteCopiedTeam() {
+    if (!copiedRoster) return
+
+    clearDistributionActions()
+
+    let nextId = team.reduce((highest, person) => Math.max(highest, person.id), 0) + 1
+    const pastedTeam = copiedRoster.map((person, index) => {
+      const destinationPerson = team[index]
+      return {
+        ...person,
+        id: destinationPerson?.id ?? nextId++,
+        completed: destinationPerson?.completed ?? 0,
+        pending: destinationPerson?.pending ?? 0,
+      }
+    })
+
+    setTeam(pastedTeam)
+    setRosterSaved(false)
+    setSaveError('')
+    setCopyPasteMessage(`Pasted the team into ${selectedDay}. Select Save day to keep it.`)
+  }
+
   function loadDay(day) {
+    const distributionActions = readDistributionActions(day)
     const savedRoster = savedRosters[day]
     const dayProgress = savedProgressRef.current[day]
     const rosterToLoad = savedRoster ?? team.map((person) => ({
@@ -491,6 +800,8 @@ function App() {
     }))
     const nextTeam = hydrateDayRoster(rosterToLoad, dayProgress)
 
+    setDistributionUndoStack(distributionActions.undo)
+    setDistributionRedoStack(distributionActions.redo)
     setSelectedDay(day)
     setTeam(nextTeam)
     setRosterSaved(Boolean(savedRoster))
@@ -551,6 +862,8 @@ function App() {
   function handleAddTeamMember() {
     if (team.length >= 100) return
 
+    clearDistributionActions()
+
     const id = team.reduce(
       (highest, person) => Math.max(highest, person.id),
       0,
@@ -586,6 +899,8 @@ function App() {
     })
     if (!confirmed) return
 
+    clearDistributionActions()
+
     const remaining = team.filter((person) => person.id !== id)
     const highestCompleted = Math.max(
       ...remaining.map((person) => person.completed),
@@ -607,6 +922,12 @@ function App() {
     if (orders === '' || !Number.isSafeInteger(total) || total < 0) {
       return
     }
+
+    setDistributionUndoStack((undoStack) => [
+      ...undoStack.slice(-(maxDistributionUndoSteps - 1)),
+      { team, allocations, distributionHistory, orders },
+    ])
+    setDistributionRedoStack([])
 
     const result = distributeOrders(team, total)
     const updatedTeam = team.map((person) => ({
@@ -637,7 +958,7 @@ function App() {
           })),
       },
       ...distributionHistory,
-    ].slice(0, 5)
+    ].slice(0, 10)
     setDistributionHistory(updatedHistory)
     rememberProgress(selectedDay, balancedTeam, result, updatedHistory)
     setOrders('')
@@ -646,6 +967,7 @@ function App() {
   function handleOrdersInput(value) {
     setOrders(value)
     setAllocations(null)
+    setDistributionRedoStack([])
     rememberProgress(selectedDay, team, null, distributionHistory)
   }
 
@@ -666,9 +988,11 @@ function App() {
       teammates: clearedTeam.map(({ id }) => ({ id, completed: 0, pending: 0 })),
       allocations: null,
       recentBatches: [],
+      updatedAt: new Date().toISOString(),
     }
 
     setTeam(clearedTeam)
+    clearDistributionActions()
     setAllocations(null)
     setDistributionHistory([])
     setOrders('')
@@ -721,7 +1045,7 @@ function App() {
                 EquiOrder
               </h1>
               <p className="text-xs font-medium text-slate-600">
-                Order distribution
+                {activePage === 'notes' ? 'Sales & CRM notes' : 'Order distribution'}
               </p>
             </div>
           </div>
@@ -734,7 +1058,7 @@ function App() {
               aria-label={`Switch to ${isDark ? 'light' : 'dark'} mode`}
               aria-pressed={isDark}
               title={`Switch to ${isDark ? 'light' : 'dark'} mode`}
-              className="grid size-11 place-items-center rounded-full border border-white/80 bg-[#eaf2fc] text-blue-800 transition hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 active:scale-95"
+              className="button-secondary grid size-11 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 active:scale-95"
             >
               <svg
                 aria-hidden="true"
@@ -759,34 +1083,25 @@ function App() {
                 {isDark ? 'Switch to light mode' : 'Switch to dark mode'}
               </span>
             </button>
-            <span className="hidden min-h-10 items-center gap-2 rounded-full border border-white/80 bg-[#eaf2fc] px-4 py-2 text-xs font-bold text-emerald-700 neo-raised-sm sm:inline-flex">
-              <span className="size-2 rounded-full bg-teal-500 shadow-[0_0_0_3px_rgba(20,184,166,0.14)]" />
-              Demo mode
+            <span
+              className="hidden min-h-10 items-center rounded-full border border-white/80 bg-[#eaf2fc] px-4 py-2 text-xs font-bold tabular-nums text-emerald-700 neo-raised-sm sm:inline-flex"
+              title="Current Eastern Time"
+            >
+              {easternTime}
             </span>
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-7xl space-y-7 px-4 py-8 sm:px-6 lg:py-10">
-        <section className="flex flex-col justify-between gap-4 px-1 sm:flex-row sm:items-end">
-          <div>
-            <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-blue-700">
-              {activePage === 'dashboard' ? 'Overview' : 'Workspace'}
-            </p>
-            <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-[#102a5c] sm:text-4xl">
-              {activePage === 'dashboard' ? 'Team dashboard' : 'Manage team'}
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-              {activePage === 'dashboard'
-                ? 'See who is working, track order progress, and balance the next batch.'
-                : 'Update your roster, order totals, and break times in one place.'}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 self-start rounded-xl border border-white/80 bg-[#eaf2fc] px-4 py-3 text-sm font-semibold text-[#254779] neo-raised-sm sm:self-auto">
-            <span className="size-2 rounded-full bg-blue-600" />
-            {team.length} {team.length === 1 ? 'teammate' : 'teammates'}
-          </div>
-        </section>
+        {activePage !== 'notes' && (
+          <section className="flex flex-col justify-between gap-4 px-1 sm:flex-row sm:items-end">
+            <div className="flex items-center gap-2 self-start rounded-xl border border-white/80 bg-[#eaf2fc] px-4 py-3 text-sm font-semibold text-[#254779] neo-raised-sm sm:self-auto">
+              <span className="size-2 rounded-full bg-blue-600" />
+              {team.length} {team.length === 1 ? 'teammate' : 'teammates'}
+            </div>
+          </section>
+        )}
 
         {activePage === 'dashboard' ? (
           <>
@@ -822,6 +1137,10 @@ function App() {
                 progressMessage={progressMessage}
                 onClearDay={handleClearDay}
                 onSubmit={handleDistribution}
+                canUndo={distributionUndoStack.length > 0}
+                canRedo={distributionRedoStack.length > 0}
+                onUndo={undoDistribution}
+                onRedo={redoDistribution}
                 orders={orders}
                 onOrdersChange={handleOrdersInput}
               />
@@ -832,7 +1151,7 @@ function App() {
               />
             </div>
           </>
-        ) : (
+        ) : activePage === 'team' ? (
           <TeamEditor
             team={team}
             selectedDay={selectedDay}
@@ -840,15 +1159,21 @@ function App() {
             rosterSaved={rosterSaved}
             saveError={saveError}
             isSaving={isSavingRoster}
+            hasCopiedRoster={Boolean(copiedRoster)}
+            copyPasteMessage={copyPasteMessage}
             onAddTeamMember={handleAddTeamMember}
             onRemoveTeamMember={handleRemoveTeamMember}
             onDaySelect={selectDay}
             onSaveDay={saveCurrentDay}
+            onCopyTeam={copyCurrentTeam}
+            onPasteTeam={pasteCopiedTeam}
             onNameChange={updateTeamName}
             onOrderCountChange={updateOrderCount}
             onBreakTimeChange={updateBreakTime}
             onStatusChange={updateTeamStatus}
           />
+        ) : (
+          <NotesPage />
         )}
 
         <footer className="py-6 text-center text-xs font-semibold text-slate-500">
