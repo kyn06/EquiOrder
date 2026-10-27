@@ -1,4 +1,7 @@
+import { OidDistributionControls } from './OidDistribution'
+
 function DistributionForm({
+  team,
   activeCount,
   history,
   selectedDay,
@@ -11,6 +14,12 @@ function DistributionForm({
   onUndo,
   onRedo,
   orders,
+  activeTab,
+  onTabChange,
+  oidInput,
+  onOidInputChange,
+  onOidCalculate,
+  oidMessage,
 }) {
   return (
     <section className="flex h-full flex-col rounded-[30px] border border-white/90 bg-[#eaf2fc] p-5 neo-raised sm:p-6">
@@ -26,7 +35,13 @@ function DistributionForm({
           </span>
         </div>
 
-        <form
+        <div className="mt-5 flex rounded-xl border border-white/80 bg-[#eaf2fc] p-1 neo-inset" role="tablist" aria-label="Distribution type">
+          {[['orders', 'Normal calculation'], ['oids', 'Actual OIDs']].map(([tabId, label]) => (
+            <button key={tabId} type="button" role="tab" aria-selected={activeTab === tabId} onClick={() => onTabChange(tabId)} className={`min-h-10 flex-1 rounded-lg px-3 py-2 text-xs font-extrabold ${activeTab === tabId ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-white/60 dark:text-slate-300'}`}>{label}</button>
+          ))}
+        </div>
+
+        {activeTab === 'oids' ? <OidDistributionControls team={team} oidInput={oidInput} onOidInputChange={onOidInputChange} onCalculate={onOidCalculate} message={oidMessage} canUndo={canUndo} canRedo={canRedo} onUndo={onUndo} onRedo={onRedo} /> : <form
           onSubmit={onSubmit}
           className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end xl:flex-col xl:items-stretch"
         >
@@ -79,7 +94,7 @@ function DistributionForm({
               Redo
             </button>
           </div>
-        </form>
+        </form>}
 
         <section className="mt-5 flex min-h-0 flex-1 flex-col border-t border-white/80 pt-4">
           <div className="flex flex-wrap items-center justify-between gap-3">

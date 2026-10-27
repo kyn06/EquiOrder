@@ -8,6 +8,7 @@ EquiOrder is a team order distribution dashboard. It helps a team share each inc
 - Distributes incoming orders among teammates marked **Working**. Their pending orders are assigned first; remaining orders are divided evenly. Any remainder goes to teammates with the most pending orders.
 - Updates completed totals after each batch and recalculates pending orders so the team can catch up evenly.
 - Keeps the ten most recent batches available on the dashboard.
+- Provides an OID Distribution page that assigns pasted OIDs using the same dashboard rules and makes them easy to paste into Google Sheets one cell per OID.
 - Provides a Notes page for standardized Sales messages, CRM logs, and quick-copy snippets.
 - Supports private accounts with separate rosters, order progress, and frequently used text.
 - Supports light and dark themes.
@@ -26,7 +27,11 @@ The selected weekday is used by the dashboard until another weekday is selected.
 
 ## Daily order progress
 
-Completed and pending counts, the latest allocations, and the ten most recent batches are saved for the selected weekday. Use **Clear day** on the dashboard to reset that weekday's order progress before starting fresh. A confirmation appears before clearing; the saved roster remains in place.
+Completed and pending counts, the latest allocations, and the ten most recent batches are saved for the selected weekday. Changes are saved immediately, and the active weekday's completed-order progress is also autosaved to PostgreSQL every 30 minutes while the dashboard is open. Use **Clear day** on the dashboard to reset that weekday's order progress before starting fresh. A confirmation appears before clearing; the saved roster remains in place.
+
+## OID distribution
+
+Choose **OID Distribution** from the menu, or select the **Actual OIDs** tab inside the dashboard's **Distribute orders** card. Paste one OID per line (for example, `N-3162-967688-4058`) and select **Calculate OID distribution**. The dashboard tab updates **Team members** exactly like a normal calculation: completed and pending counts, allocations, and recent batch history are saved. Assigned OIDs are also retained in this browser by account and weekday, so they remain after an accidental reload. The standalone **OID Distribution** page is preview/copy-only and does not change team counts, allocations, or saved history. Copy a teammate's assigned OIDs and paste them into Google Sheets; each newline becomes one cell. The displayed cells use centered Arial 10pt text with borders.
 
 ## Data storage
 

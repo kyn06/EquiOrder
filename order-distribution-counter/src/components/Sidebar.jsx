@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 const pages = [
   { id: 'dashboard', label: 'Dashboard' },
+  { id: 'oid-distribution', label: 'OID Distribution' },
   { id: 'team', label: 'Manage team' },
   { id: 'notes', label: 'Notes' },
 ]

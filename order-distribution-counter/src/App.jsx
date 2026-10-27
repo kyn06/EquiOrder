@@ -5,21 +5,26 @@ import DistributionForm from './components/DistributionForm'
 import DropdownSelect from './components/DropdownSelect'
 import LoginPage from './components/LoginPage'
 import NotesPage from './components/NotesPage'
+import { AssignedOids } from './components/OidDistribution'
+import OidDistributionPage from './components/OidDistributionPage'
 import ProfileDropdown from './components/ProfileDropdown'
 import Sidebar from './components/Sidebar'
 import StatCard from './components/StatCard'
 import TeamEditor from './components/TeamEditor'
 import TeamTable from './components/TeamTable'
 import { distributeOrders } from './utils/distribution'
+import { createOidAssignments, parseOids } from './utils/oidDistribution'
 
 const initialTeam = []
 
 const dailyRosterStorageKey = 'equiorder-daily-rosters-v1'
 const dailyProgressStorageKey = 'equiorder-daily-progress-v1'
+const assignedOidsStorageKey = 'equiorder-assigned-oids-v1'
 const selectedWeekdayStorageKey = 'equiorder-selected-weekday-v1'
 const activePageStorageKey = 'equiorder-active-page-v1'
 const distributionActionsStorageKey = 'equiorder-distribution-actions-v1'
 const maxDistributionUndoSteps = 20
+const completedOrdersAutosaveIntervalMs = 30 * 60 * 1000
 const initialAccountEmail = 'pjkim.garcia@gmail.com'
 const weekdays = [
   'Monday',
@@ -67,7 +72,7 @@ function getInitialActivePage() {
   if (typeof window !== 'undefined') {
     try {
       const savedPage = window.localStorage.getItem(activePageStorageKey)
-      if (['dashboard', 'team', 'notes'].includes(savedPage)) {
+      if (['dashboard', 'oid-distribution', 'team', 'notes'].includes(savedPage)) {
         return savedPage
       }
     } catch {
@@ -147,6 +152,49 @@ function cacheDailyProgress(progress, userId) {
     window.localStorage.setItem(accountStorageKey(dailyProgressStorageKey, userId), JSON.stringify(progress))
   } catch {
     // PostgreSQL remains the primary store if the browser cache is unavailable.
+  }
+}
+
+function readAssignedOids(day, userId) {
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(`${assignedOidsStorageKey}-${userId}-${day}`) || '[]',
+    )
+    return Array.isArray(parsed)
+      ? parsed.filter((assignment) => (
+        assignment &&
+        Number.isSafeInteger(assignment.id) &&
+        typeof assignment.name === 'string' &&
+        Array.isArray(assignment.oids) &&
+        assignment.oids.every((oid) => typeof oid === 'string')
+      ))
+      : []
+  } catch {
+    return []
+  }
+}
+
+function cacheAssignedOids(day, assignments, userId) {
+  try {
+    window.localStorage.setItem(
+      `${assignedOidsStorageKey}-${userId}-${day}`,
+      JSON.stringify(assignments),
+    )
+  } catch {
+    // Assigned OIDs remain available in memory if browser storage is unavailable.
+  }
+}
+
+async function saveProgressToDatabase(day, progress) {
+  const response = await fetch(`/api/progress/${encodeURIComponent(day)}`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ progress }),
+  })
+
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({}))
+    throw new Error(result.error || 'Could not save order progress.')
   }
 }
 
@@ -298,6 +346,10 @@ function DashboardApp({ user, onLogout }) {
   const [apiConnected, setApiConnected] = useState(false)
   const [progressMessage, setProgressMessage] = useState('')
   const [orders, setOrders] = useState('')
+  const [distributionTab, setDistributionTab] = useState('orders')
+  const [oidInput, setOidInput] = useState('')
+  const [oidAssignments, setOidAssignments] = useState(() => readAssignedOids(selectedDay, user.id))
+  const [oidMessage, setOidMessage] = useState('')
   const [allocations, setAllocations] = useState(
     () => savedProgress[selectedDay]?.allocations ?? null,
   )
@@ -310,6 +362,13 @@ function DashboardApp({ user, onLogout }) {
   const [distributionRedoStack, setDistributionRedoStack] = useState(
     () => readDistributionActions(selectedDay, user.id).redo,
   )
+  const progressStateRef = useRef({
+    selectedDay,
+    team,
+    allocations,
+    distributionHistory,
+    apiConnected,
+  })
 
   useEffect(() => {
     const guardState = { equiorderDashboard: true }
@@ -326,6 +385,52 @@ function DashboardApp({ user, onLogout }) {
   useEffect(() => {
     cacheDistributionActions(selectedDay, distributionUndoStack, distributionRedoStack, user.id)
   }, [distributionRedoStack, distributionUndoStack, selectedDay, user.id])
+
+  useEffect(() => {
+    cacheAssignedOids(selectedDay, oidAssignments, user.id)
+  }, [oidAssignments, selectedDay, user.id])
+
+  useEffect(() => {
+    progressStateRef.current = {
+      selectedDay,
+      team,
+      allocations,
+      distributionHistory,
+      apiConnected,
+    }
+  }, [allocations, apiConnected, distributionHistory, selectedDay, team])
+
+  useEffect(() => {
+    async function autosaveCompletedOrders() {
+      const current = progressStateRef.current
+      if (!current.apiConnected || current.team.length === 0) return
+
+      try {
+        await saveProgressToDatabase(current.selectedDay, {
+          teammates: current.team.map(({ id, completed, pending }) => ({
+            id,
+            completed,
+            pending,
+          })),
+          allocations: current.allocations,
+          recentBatches: current.distributionHistory,
+          updatedAt: new Date().toISOString(),
+        })
+      } catch {
+        setApiConnected(false)
+        setProgressMessage(
+          'PostgreSQL is unavailable. Order progress is cached in this browser.',
+        )
+      }
+    }
+
+    const autosave = window.setInterval(
+      autosaveCompletedOrders,
+      completedOrdersAutosaveIntervalMs,
+    )
+
+    return () => window.clearInterval(autosave)
+  }, [user.id])
 
   useEffect(() => {
     const clock = window.setInterval(() => {
@@ -400,13 +505,7 @@ function DashboardApp({ user, onLogout }) {
         setAllocations(null)
         rememberProgress(selectedDay, updatedTeam, null, distributionHistory)
       }
-      const transitionMessages = transitions.map(({ name, status }) =>
-        status === 'break' ? `${name} is now on break` : `${name} returned to work`,
-      )
-      setProgressMessage(
-        `${currentDayIsSelected ? '' : `${currentWeekday}: `}${transitionMessages.join('; ')} automatically 5 minutes before the scheduled time.`,
-      )
-
+      
       const newlyOnBreak = transitions.filter(({ id, status }) => {
         if (status !== 'break') return false
         const teammate = scheduledRoster.find((person) => person.id === id)
@@ -618,15 +717,7 @@ function DashboardApp({ user, onLogout }) {
 
     const timeout = window.setTimeout(async () => {
       try {
-        const response = await fetch(
-          `/api/progress/${encodeURIComponent(selectedDay)}`,
-          {
-            method: 'PUT',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ progress }),
-          },
-        )
-        if (!response.ok) throw new Error('Could not save this day’s order progress.')
+        await saveProgressToDatabase(selectedDay, progress)
       } catch {
         setApiConnected(false)
         setProgressMessage('PostgreSQL is unavailable. Order progress is cached in this browser.')
@@ -677,6 +768,8 @@ function DashboardApp({ user, onLogout }) {
     setAllocations(snapshot.allocations)
     setDistributionHistory(snapshot.distributionHistory)
     setOrders(snapshot.orders)
+    setOidAssignments([])
+    setOidMessage('')
     rememberProgress(
       selectedDay,
       snapshot.team,
@@ -699,6 +792,8 @@ function DashboardApp({ user, onLogout }) {
     setAllocations(snapshot.allocations)
     setDistributionHistory(snapshot.distributionHistory)
     setOrders(snapshot.orders)
+    setOidAssignments([])
+    setOidMessage('')
     rememberProgress(
       selectedDay,
       snapshot.team,
@@ -825,6 +920,7 @@ function DashboardApp({ user, onLogout }) {
     setOrders('')
     setAllocations(dayProgress?.allocations ?? null)
     setDistributionHistory(dayProgress?.recentBatches ?? [])
+    setOidAssignments(readAssignedOids(day, user.id))
   }
 
   async function saveCurrentDay() {
@@ -995,6 +1091,68 @@ function DashboardApp({ user, onLogout }) {
     setOrders('')
   }
 
+  function handleOidDistribution(event) {
+    event.preventDefault()
+    const oids = parseOids(oidInput)
+    const workingCount = team.filter((person) => person.status === 'working').length
+
+    if (oids.length === 0 || workingCount === 0) {
+      setOidAssignments([])
+      setOidMessage(workingCount === 0 ? 'No teammates are currently working.' : 'Paste at least one OID.')
+      return
+    }
+
+    setDistributionUndoStack((undoStack) => [
+      ...undoStack.slice(-(maxDistributionUndoSteps - 1)),
+      { team, allocations, distributionHistory, orders },
+    ])
+    setDistributionRedoStack([])
+
+    const result = distributeOrders(team, oids.length)
+    const updatedTeam = team.map((person) => ({
+      ...person,
+      completed: person.completed + (result[person.id] ?? 0),
+    }))
+    const highestCompleted = Math.max(
+      ...updatedTeam.map((person) => person.completed),
+    )
+    const balancedTeam = updatedTeam.map((person) => ({
+      ...person,
+      pending: Math.max(0, highestCompleted - person.completed),
+    }))
+    const completedAt = new Date().toISOString()
+    const updatedHistory = [
+      {
+        id: completedAt,
+        completedAt,
+        totalOrders: oids.length,
+        allocations: team
+          .filter((person) => person.status === 'working')
+          .map((person) => ({
+            name: person.name,
+            count: result[person.id] ?? 0,
+          })),
+      },
+      ...distributionHistory,
+    ].slice(0, 10)
+
+    setTeam(balancedTeam)
+    setAllocations(result)
+    setOidAssignments(createOidAssignments(team, oids))
+    setDistributionHistory(updatedHistory)
+    rememberProgress(selectedDay, balancedTeam, result, updatedHistory)
+    setOidMessage(`${oids.length} OID${oids.length === 1 ? '' : 's'} distributed across ${workingCount} working teammate${workingCount === 1 ? '' : 's'}.`)
+  }
+
+  async function copyAssignedOids(oids, teammateName = 'OIDs') {
+    try {
+      await navigator.clipboard.writeText(oids.join('\n'))
+      setOidMessage(`${teammateName} copied. Paste into Google Sheets for one OID per cell.`)
+    } catch {
+      setOidMessage('Copy failed. Select the OIDs and copy them manually.')
+    }
+  }
+
   function handleOrdersInput(value) {
     setOrders(value)
     setAllocations(null)
@@ -1076,7 +1234,11 @@ function DashboardApp({ user, onLogout }) {
                 EquiOrder
               </h1>
               <p className="text-xs font-medium text-slate-600">
-                {activePage === 'notes' ? 'Sales & CRM notes' : 'Order distribution'}
+                {activePage === 'notes'
+                  ? 'Sales & CRM notes'
+                  : activePage === 'oid-distribution'
+                    ? 'Copy-ready OID distribution'
+                    : 'Order distribution'}
               </p>
             </div>
           </div>
@@ -1206,16 +1368,28 @@ function DashboardApp({ user, onLogout }) {
                 onUndo={undoDistribution}
                 onRedo={redoDistribution}
                 orders={orders}
+                team={team}
                 onOrdersChange={handleOrdersInput}
+                activeTab={distributionTab}
+                onTabChange={setDistributionTab}
+                oidInput={oidInput}
+                onOidInputChange={(value) => { setOidInput(value); setOidMessage('') }}
+                onOidCalculate={handleOidDistribution}
+                oidMessage={oidMessage}
               />
 
-              <TeamTable
-                team={team}
-                allocations={allocations}
-                onOrderCountChange={updateOrderCount}
-              />
+              <div className="space-y-6">
+                <TeamTable
+                  team={team}
+                  allocations={allocations}
+                  onOrderCountChange={updateOrderCount}
+                />
+                <AssignedOids assignments={oidAssignments} onCopy={copyAssignedOids} />
+              </div>
             </div>
           </>
+        ) : activePage === 'oid-distribution' ? (
+          <OidDistributionPage team={team} selectedDay={selectedDay} />
         ) : activePage === 'team' ? (
           <TeamEditor
             team={team}
