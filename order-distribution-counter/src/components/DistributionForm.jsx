@@ -18,6 +18,7 @@ function DistributionForm({
   onTabChange,
   oidInput,
   onOidInputChange,
+  onOidClear,
   onOidCalculate,
   oidMessage,
 }) {
@@ -41,7 +42,7 @@ function DistributionForm({
           ))}
         </div>
 
-        {activeTab === 'oids' ? <OidDistributionControls team={team} oidInput={oidInput} onOidInputChange={onOidInputChange} onCalculate={onOidCalculate} message={oidMessage} canUndo={canUndo} canRedo={canRedo} onUndo={onUndo} onRedo={onRedo} /> : <form
+        {activeTab === 'oids' ? <OidDistributionControls team={team} oidInput={oidInput} onOidInputChange={onOidInputChange} onClear={onOidClear} onCalculate={onOidCalculate} message={oidMessage} canUndo={canUndo} canRedo={canRedo} onUndo={onUndo} onRedo={onRedo} /> : <form
           onSubmit={onSubmit}
           className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end xl:flex-col xl:items-stretch"
         >

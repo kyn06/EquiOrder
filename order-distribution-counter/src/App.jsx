@@ -1374,6 +1374,7 @@ function DashboardApp({ user, onLogout }) {
                 onTabChange={setDistributionTab}
                 oidInput={oidInput}
                 onOidInputChange={(value) => { setOidInput(value); setOidMessage('') }}
+                onOidClear={() => { setOidInput(''); setOidMessage('') }}
                 onOidCalculate={handleOidDistribution}
                 oidMessage={oidMessage}
               />

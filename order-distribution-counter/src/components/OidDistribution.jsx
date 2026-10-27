@@ -1,13 +1,16 @@
 import { parseOids } from '../utils/oidDistribution'
 
-export function OidDistributionControls({ team, oidInput, onOidInputChange, onCalculate, message, canUndo, canRedo, onUndo, onRedo }) {
+export function OidDistributionControls({ team, oidInput, onOidInputChange, onClear, onCalculate, message, canUndo, canRedo, onUndo, onRedo }) {
   const oidCount = parseOids(oidInput).length
   const workingCount = team.filter((person) => person.status === 'working').length
 
   return (
     <form onSubmit={onCalculate} className="mt-5">
       <label htmlFor="dashboard-oid-input" className="mb-1.5 block text-sm font-bold text-[#254779]">OIDs</label>
-      <textarea id="dashboard-oid-input" value={oidInput} onChange={(event) => onOidInputChange(event.target.value)} placeholder={'Paste OIDs here, one per line\nN-3162-967688-4058\nN-3162-961686-5364'} rows={8} className="min-h-48 w-full resize-y rounded-2xl border border-white/90 bg-[#eaf2fc] px-4 py-3 font-mono text-sm text-[#102a5c] outline-none neo-inset placeholder:text-slate-500 focus-visible:ring-4 focus-visible:ring-blue-200" />
+      <div className="relative">
+        <textarea id="dashboard-oid-input" value={oidInput} onChange={(event) => onOidInputChange(event.target.value)} placeholder={'Paste OIDs here, one per line\nN-3162-967688-4058\nN-3162-961686-5364'} rows={8} className="min-h-48 w-full resize-y rounded-2xl border border-white/90 bg-[#eaf2fc] px-4 py-3 pr-28 pt-12 font-mono text-sm text-[#102a5c] outline-none neo-inset placeholder:text-slate-500 focus-visible:ring-4 focus-visible:ring-blue-200" />
+        <button type="button" onClick={onClear} disabled={!oidInput} className="button-secondary absolute right-3 top-3 rounded-lg px-3 py-2 text-xs font-extrabold disabled:cursor-not-allowed disabled:opacity-50">Delete all</button>
+      </div>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <span className="text-xs font-semibold text-slate-500">{oidCount} OID{oidCount === 1 ? '' : 's'} detected</span>
         <div className="flex flex-wrap gap-2">
