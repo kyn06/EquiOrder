@@ -1,5 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 
+import DropdownSelect from './DropdownSelect'
+
 function TeamEditor({
   team,
   selectedDay,
@@ -107,18 +109,13 @@ function TeamEditor({
               Save stores names, status, break times, custom order, and completed/pending counts.
             </p>
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              <select
-                id="roster-weekday"
+              <DropdownSelect
+                label="Roster weekday"
                 value={selectedDay}
-                onChange={(event) => onDaySelect(event.target.value)}
-                className="min-h-12 min-w-0 flex-1 rounded-2xl border border-white/90 bg-[#eaf2fc] px-4 py-3 font-semibold text-[#102a5c] outline-none neo-inset focus-visible:ring-4 focus-visible:ring-blue-200 sm:basis-48"
-              >
-                {weekdays.map((weekday) => (
-                  <option key={weekday} value={weekday}>
-                    {weekday}
-                  </option>
-                ))}
-              </select>
+                onChange={onDaySelect}
+                options={weekdays.map((weekday) => ({ value: weekday, label: weekday }))}
+                className="min-w-0 flex-1 sm:basis-48"
+              />
               <button
                 type="button"
                 onClick={onCopyTeam}

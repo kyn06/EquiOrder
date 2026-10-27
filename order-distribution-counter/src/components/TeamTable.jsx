@@ -1,4 +1,18 @@
 import { useState } from 'react'
+import DropdownSelect from './DropdownSelect'
+
+const sortOptions = [
+  { value: 'custom', label: 'Custom order' },
+  { value: 'name', label: 'Name' },
+  { value: 'status', label: 'Status' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'allocation', label: 'New allocation' },
+]
+const directionOptions = [
+  { value: 'asc', label: 'Ascending' },
+  { value: 'desc', label: 'Descending' },
+]
 
 function TeamTable({ team, allocations, onOrderCountChange }) {
   const [sortBy, setSortBy] = useState('custom')
@@ -39,35 +53,25 @@ function TeamTable({ team, allocations, onOrderCountChange }) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex min-h-11 items-center gap-2 rounded-xl border border-white/90 bg-[#eaf2fc] px-3 text-xs font-bold text-slate-700 neo-inset">
+          <div className="flex min-h-11 items-center gap-2 rounded-xl border border-white/90 bg-[#eaf2fc] px-3 text-xs font-bold text-slate-700 neo-inset">
             <span>Sort</span>
-            <select
-              aria-label="Sort team members by"
+            <DropdownSelect
+              label="Sort team members by"
               value={activeSort}
-              onChange={(event) => setSortBy(event.target.value)}
-              className="team-sort-select min-h-10 bg-transparent text-sm font-semibold"
-            >
-              <option value="custom">Custom order</option>
-              <option value="name">Name</option>
-              <option value="status">Status</option>
-              <option value="completed">Completed</option>
-              <option value="pending">Pending</option>
-              <option value="allocation">New allocation</option>
-            </select>
-          </label>
+              onChange={setSortBy}
+              options={sortOptions}
+            />
+          </div>
           {activeSort !== 'custom' && (
-            <label className="flex min-h-11 items-center gap-2 rounded-xl border border-white/90 bg-[#eaf2fc] px-3 text-xs font-bold text-slate-700 neo-inset">
+            <div className="flex min-h-11 items-center gap-2 rounded-xl border border-white/90 bg-[#eaf2fc] px-3 text-xs font-bold text-slate-700 neo-inset">
               <span>Order</span>
-              <select
-                aria-label="Sort direction"
+              <DropdownSelect
+                label="Sort direction"
                 value={sortDirection}
-                onChange={(event) => setSortDirection(event.target.value)}
-                className="team-sort-select min-h-10 bg-transparent text-sm font-semibold"
-              >
-                <option value="asc">Ascending</option>
-                <option value="desc">Descending</option>
-              </select>
-            </label>
+                onChange={setSortDirection}
+                options={directionOptions}
+              />
+            </div>
           )}
           <div className="flex gap-2 text-xs font-semibold">
             <span className="rounded-full border border-white/90 bg-[#eaf2fc] px-3 py-1.5 text-green-800 neo-raised-sm">

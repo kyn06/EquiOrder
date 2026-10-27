@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import DistributionForm from './components/DistributionForm'
+import DropdownSelect from './components/DropdownSelect'
 import NotesPage from './components/NotesPage'
+import ProfileDropdown from './components/ProfileDropdown'
 import Sidebar from './components/Sidebar'
 import StatCard from './components/StatCard'
 import TeamEditor from './components/TeamEditor'
@@ -1092,6 +1094,20 @@ function App() {
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <Sidebar activePage={activePage} onNavigate={setActivePage} />
+            <ProfileDropdown
+              onLogout={() => {
+                const darkMode = document.documentElement.classList.contains('dark')
+                Swal.fire({
+                  title: 'Login is not connected yet',
+                  text: 'This profile is a preview. Sign-in and logout will be available when authentication is added.',
+                  icon: 'info',
+                  confirmButtonText: 'Got it',
+                  confirmButtonColor: darkMode ? '#2563eb' : '#1d4ed8',
+                  background: darkMode ? '#172235' : '#eaf2fc',
+                  color: darkMode ? '#eaf2fc' : '#102a5c',
+                })
+              }}
+            />
             <button
               type="button"
               onClick={() => setIsDark((current) => !current)}
@@ -1136,9 +1152,20 @@ function App() {
       <main className="mx-auto max-w-7xl space-y-7 px-4 py-8 sm:px-6 lg:py-10">
         {activePage !== 'notes' && (
           <section className="flex flex-col justify-between gap-4 px-1 sm:flex-row sm:items-end">
-            <div className="flex items-center gap-2 self-start rounded-xl border border-white/80 bg-[#eaf2fc] px-4 py-3 text-sm font-semibold text-[#254779] neo-raised-sm sm:self-auto">
-              <span className="size-2 rounded-full bg-blue-600" />
-              {team.length} {team.length === 1 ? 'teammate' : 'teammates'}
+            <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
+              <div className="flex min-h-11 items-center gap-2 rounded-xl border border-white/80 bg-[#eaf2fc] px-4 py-2 text-sm font-semibold text-[#254779] neo-raised-sm">
+                <span className="size-2 rounded-full bg-blue-600" />
+                {team.length} {team.length === 1 ? 'teammate' : 'teammates'}
+              </div>
+              <div className="flex min-h-11 items-center gap-2 rounded-xl border border-white/90 bg-[#eaf2fc] px-3 text-xs font-bold text-slate-700 neo-inset">
+                <span>Day</span>
+                <DropdownSelect
+                  label="Day"
+                  value={selectedDay}
+                  onChange={selectDay}
+                  options={weekdays.map((weekday) => ({ value: weekday, label: weekday }))}
+                />
+              </div>
             </div>
           </section>
         )}
