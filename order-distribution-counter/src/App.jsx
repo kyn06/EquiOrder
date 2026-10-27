@@ -3,6 +3,7 @@ import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import DistributionForm from './components/DistributionForm'
 import DropdownSelect from './components/DropdownSelect'
+import LoginPage from './components/LoginPage'
 import NotesPage from './components/NotesPage'
 import ProfileDropdown from './components/ProfileDropdown'
 import Sidebar from './components/Sidebar'
@@ -11,62 +12,7 @@ import TeamEditor from './components/TeamEditor'
 import TeamTable from './components/TeamTable'
 import { distributeOrders } from './utils/distribution'
 
-const initialTeam = [
-  {
-    id: 1,
-    name: 'You',
-    status: 'working',
-    pending: 0,
-    completed: 0,
-    breakStartTime: '',
-    returnTime: '',
-  },
-  {
-    id: 2,
-    name: 'Teammate 2',
-    status: 'working',
-    pending: 0,
-    completed: 0,
-    breakStartTime: '',
-    returnTime: '',
-  },
-  {
-    id: 3,
-    name: 'Teammate 3',
-    status: 'working',
-    pending: 0,
-    completed: 0,
-    breakStartTime: '',
-    returnTime: '',
-  },
-  {
-    id: 4,
-    name: 'Teammate 4',
-    status: 'working',
-    pending: 0,
-    completed: 0,
-    breakStartTime: '',
-    returnTime: '',
-  },
-  {
-    id: 5,
-    name: 'Teammate 5',
-    status: 'working',
-    pending: 0,
-    completed: 0,
-    breakStartTime: '',
-    returnTime: '',
-  },
-  {
-    id: 6,
-    name: 'Teammate 6',
-    status: 'break',
-    pending: 2,
-    completed: 0,
-    breakStartTime: '',
-    returnTime: '',
-  },
-]
+const initialTeam = []
 
 const dailyRosterStorageKey = 'equiorder-daily-rosters-v1'
 const dailyProgressStorageKey = 'equiorder-daily-progress-v1'
@@ -74,6 +20,7 @@ const selectedWeekdayStorageKey = 'equiorder-selected-weekday-v1'
 const activePageStorageKey = 'equiorder-active-page-v1'
 const distributionActionsStorageKey = 'equiorder-distribution-actions-v1'
 const maxDistributionUndoSteps = 20
+const initialAccountEmail = 'pjkim.garcia@gmail.com'
 const weekdays = [
   'Monday',
   'Tuesday',
@@ -131,13 +78,17 @@ function getInitialActivePage() {
   return 'dashboard'
 }
 
-function readDailyRosters() {
+function accountStorageKey(key, userId) {
+  return `${key}-${userId}`
+}
+
+function readDailyRosters(userId) {
   if (typeof window === 'undefined') {
     return {}
   }
 
   try {
-    const stored = window.localStorage.getItem(dailyRosterStorageKey)
+    const stored = window.localStorage.getItem(accountStorageKey(dailyRosterStorageKey, userId))
     const parsed = stored ? JSON.parse(stored) : {}
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return {}
@@ -168,20 +119,20 @@ function readDailyRosters() {
   }
 }
 
-function cacheDailyRosters(rosters) {
+function cacheDailyRosters(rosters, userId) {
   try {
-    window.localStorage.setItem(dailyRosterStorageKey, JSON.stringify(rosters))
+    window.localStorage.setItem(accountStorageKey(dailyRosterStorageKey, userId), JSON.stringify(rosters))
   } catch {
     // PostgreSQL remains the primary store if the browser cache is unavailable.
   }
 }
 
-function readDailyProgress() {
+function readDailyProgress(userId) {
   if (typeof window === 'undefined') return {}
 
   try {
     const parsed = JSON.parse(
-      window.localStorage.getItem(dailyProgressStorageKey) || '{}',
+      window.localStorage.getItem(accountStorageKey(dailyProgressStorageKey, userId)) || '{}',
     )
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? parsed
@@ -191,9 +142,9 @@ function readDailyProgress() {
   }
 }
 
-function cacheDailyProgress(progress) {
+function cacheDailyProgress(progress, userId) {
   try {
-    window.localStorage.setItem(dailyProgressStorageKey, JSON.stringify(progress))
+    window.localStorage.setItem(accountStorageKey(dailyProgressStorageKey, userId), JSON.stringify(progress))
   } catch {
     // PostgreSQL remains the primary store if the browser cache is unavailable.
   }
@@ -211,11 +162,11 @@ function isDistributionSnapshot(snapshot) {
   )
 }
 
-function readDistributionActions(day) {
+function readDistributionActions(day, userId) {
   if (typeof window === 'undefined') return { undo: [], redo: [] }
 
   try {
-    const stored = window.localStorage.getItem(`${distributionActionsStorageKey}-${day}`)
+    const stored = window.localStorage.getItem(`${distributionActionsStorageKey}-${userId}-${day}`)
     const parsed = JSON.parse(stored || '{}')
     return {
       undo: Array.isArray(parsed.undo)
@@ -230,14 +181,39 @@ function readDistributionActions(day) {
   }
 }
 
-function cacheDistributionActions(day, undo, redo) {
+function cacheDistributionActions(day, undo, redo, userId) {
   try {
     window.localStorage.setItem(
-      `${distributionActionsStorageKey}-${day}`,
+      `${distributionActionsStorageKey}-${userId}-${day}`,
       JSON.stringify({ undo, redo }),
     )
   } catch {
     // Keep distribution undo history in memory when browser storage is unavailable.
+  }
+}
+
+function adoptLegacyBrowserCache(user) {
+  if (user.email.toLowerCase() !== initialAccountEmail) return
+  try {
+    const storageMigrations = [dailyRosterStorageKey, dailyProgressStorageKey]
+    for (const key of storageMigrations) {
+      const accountKey = accountStorageKey(key, user.id)
+      if (window.localStorage.getItem(accountKey) === null) {
+        const legacyValue = window.localStorage.getItem(key)
+        if (legacyValue !== null) window.localStorage.setItem(accountKey, legacyValue)
+      }
+    }
+
+    for (const day of weekdays) {
+      const legacyKey = `${distributionActionsStorageKey}-${day}`
+      const accountKey = `${distributionActionsStorageKey}-${user.id}-${day}`
+      if (window.localStorage.getItem(accountKey) === null) {
+        const legacyValue = window.localStorage.getItem(legacyKey)
+        if (legacyValue !== null) window.localStorage.setItem(accountKey, legacyValue)
+      }
+    }
+  } catch {
+    // Database data remains available if browser storage cannot be read.
   }
 }
 
@@ -294,11 +270,11 @@ function confirmDestructiveAction({ title, text, confirmButtonText }) {
   }).then((result) => result.isConfirmed)
 }
 
-function App() {
+function DashboardApp({ user, onLogout }) {
   const [isDark, setIsDark] = useState(getInitialTheme)
   const [easternTime, setEasternTime] = useState(() => formatEasternTime(new Date()))
-  const [savedRosters, setSavedRosters] = useState(readDailyRosters)
-  const [savedProgress, setSavedProgress] = useState(readDailyProgress)
+  const [savedRosters, setSavedRosters] = useState(() => readDailyRosters(user.id))
+  const [savedProgress, setSavedProgress] = useState(() => readDailyProgress(user.id))
   const savedProgressRef = useRef(savedProgress)
   const [selectedDay, setSelectedDay] = useState(getInitialSelectedDay)
   const selectedDayRef = useRef(selectedDay)
@@ -329,15 +305,27 @@ function App() {
     () => savedProgress[selectedDay]?.recentBatches ?? [],
   )
   const [distributionUndoStack, setDistributionUndoStack] = useState(
-    () => readDistributionActions(selectedDay).undo,
+    () => readDistributionActions(selectedDay, user.id).undo,
   )
   const [distributionRedoStack, setDistributionRedoStack] = useState(
-    () => readDistributionActions(selectedDay).redo,
+    () => readDistributionActions(selectedDay, user.id).redo,
   )
 
   useEffect(() => {
-    cacheDistributionActions(selectedDay, distributionUndoStack, distributionRedoStack)
-  }, [distributionRedoStack, distributionUndoStack, selectedDay])
+    const guardState = { equiorderDashboard: true }
+    window.history.pushState(guardState, '', window.location.href)
+
+    function keepDashboardOpen() {
+      window.history.pushState(guardState, '', window.location.href)
+    }
+
+    window.addEventListener('popstate', keepDashboardOpen)
+    return () => window.removeEventListener('popstate', keepDashboardOpen)
+  }, [])
+
+  useEffect(() => {
+    cacheDistributionActions(selectedDay, distributionUndoStack, distributionRedoStack, user.id)
+  }, [distributionRedoStack, distributionUndoStack, selectedDay, user.id])
 
   useEffect(() => {
     const clock = window.setInterval(() => {
@@ -448,7 +436,7 @@ function App() {
 
       const updatedRosters = { ...savedRosters, [currentWeekday]: updatedRoster }
       setSavedRosters(updatedRosters)
-      cacheDailyRosters(updatedRosters)
+      cacheDailyRosters(updatedRosters, user.id)
       if (currentDayIsSelected) setRosterSaved(true)
 
       if (apiConnected) {
@@ -470,7 +458,7 @@ function App() {
     applyScheduledStatuses()
     const schedule = window.setInterval(applyScheduledStatuses, 15_000)
     return () => window.clearInterval(schedule)
-  }, [apiConnected, distributionHistory, rosterSaved, savedRosters, selectedDay, team])
+  }, [apiConnected, distributionHistory, rosterSaved, savedRosters, selectedDay, team, user.id])
 
   const activeCount = team.filter(
     (person) => person.status === 'working',
@@ -529,8 +517,8 @@ function App() {
 
         const databaseRosters = result.rosters ?? {}
         const databaseProgress = result.progress ?? {}
-        const cachedRosters = readDailyRosters()
-        const cachedProgress = readDailyProgress()
+        const cachedRosters = readDailyRosters(user.id)
+        const cachedProgress = readDailyProgress(user.id)
 
         for (const [weekday, roster] of Object.entries(cachedRosters)) {
           if (roster.length > 0 && !databaseRosters[weekday]?.length) {
@@ -594,14 +582,14 @@ function App() {
         setSavedRosters(databaseRosters)
         setSavedProgress(databaseProgress)
         savedProgressRef.current = databaseProgress
-        cacheDailyRosters(databaseRosters)
-        cacheDailyProgress(databaseProgress)
+        cacheDailyRosters(databaseRosters, user.id)
+        cacheDailyProgress(databaseProgress, user.id)
         const activeDay = selectedDayRef.current
         const activeRoster = databaseRosters[activeDay]?.length
           ? databaseRosters[activeDay]
           : cachedRosters[activeDay]?.length
             ? cachedRosters[activeDay]
-            : initialTeam
+            : []
         setTeam(hydrateDayRoster(activeRoster, databaseProgress[activeDay]))
         setRosterSaved(Boolean(databaseRosters[activeDay]?.length))
         setAllocations(databaseProgress[activeDay]?.allocations ?? null)
@@ -622,11 +610,11 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [user.id])
 
   useEffect(() => {
     const progress = JSON.parse(orderProgressPayload)
-    if (!apiConnected) return undefined
+    if (!apiConnected || team.length === 0) return undefined
 
     const timeout = window.setTimeout(async () => {
       try {
@@ -650,6 +638,7 @@ function App() {
     selectedDay,
     orderProgressPayload,
     apiConnected,
+    team.length,
   ])
 
   function rememberProgress(day, teamSnapshot, allocationSnapshot, historySnapshot) {
@@ -666,7 +655,7 @@ function App() {
     const updated = { ...savedProgressRef.current, [day]: progress }
     savedProgressRef.current = updated
     setSavedProgress(updated)
-    cacheDailyProgress(updated)
+    cacheDailyProgress(updated, user.id)
   }
 
   function clearDistributionActions() {
@@ -815,7 +804,7 @@ function App() {
   }
 
   function loadDay(day) {
-    const distributionActions = readDistributionActions(day)
+    const distributionActions = readDistributionActions(day, user.id)
     const savedRoster = savedRosters[day]
     const dayProgress = savedProgressRef.current[day]
     const rosterToLoad = savedRoster ?? team.map((person) => ({
@@ -866,7 +855,7 @@ function App() {
       }
 
       setSavedRosters(updatedRosters)
-      cacheDailyRosters(updatedRosters)
+      cacheDailyRosters(updatedRosters, user.id)
       setRosterSaved(true)
       setSaveError('')
     } catch {
@@ -1045,7 +1034,7 @@ function App() {
     }
     savedProgressRef.current = updatedProgress
     setSavedProgress(updatedProgress)
-    cacheDailyProgress(updatedProgress)
+    cacheDailyProgress(updatedProgress, user.id)
 
     if (!apiConnected) return
 
@@ -1095,17 +1084,25 @@ function App() {
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <Sidebar activePage={activePage} onNavigate={setActivePage} />
             <ProfileDropdown
-              onLogout={() => {
-                const darkMode = document.documentElement.classList.contains('dark')
-                Swal.fire({
-                  title: 'Login is not connected yet',
-                  text: 'This profile is a preview. Sign-in and logout will be available when authentication is added.',
-                  icon: 'info',
-                  confirmButtonText: 'Got it',
-                  confirmButtonColor: darkMode ? '#2563eb' : '#1d4ed8',
-                  background: darkMode ? '#172235' : '#eaf2fc',
-                  color: darkMode ? '#eaf2fc' : '#102a5c',
-                })
+              name={user.name}
+              email={user.email}
+              onLogout={async () => {
+                try {
+                  const response = await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                  })
+                  if (!response.ok) throw new Error('Could not sign out.')
+                  onLogout()
+                } catch {
+                  Swal.fire({
+                    title: 'Could not sign out',
+                    text: 'Check your connection and try again.',
+                    icon: 'error',
+                    confirmButtonText: 'OK',
+                    confirmButtonColor: '#1d4ed8',
+                  })
+                }
               }}
             />
             <button
@@ -1242,7 +1239,7 @@ function App() {
             onStatusChange={updateTeamStatus}
           />
         ) : (
-          <NotesPage />
+          <NotesPage userId={user.id} />
         )}
 
         <footer className="py-6 text-center text-xs font-semibold text-slate-500">
@@ -1251,6 +1248,57 @@ function App() {
       </main>
     </div>
   )
+}
+
+function App() {
+  const [user, setUser] = useState(null)
+  const [isCheckingSession, setIsCheckingSession] = useState(true)
+  const [authError, setAuthError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/auth/me', { credentials: 'same-origin' })
+      .then(async (response) => {
+        if (response.status === 401) return null
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error || 'Could not check your session.')
+        return result.user
+      })
+      .then((authenticatedUser) => {
+        if (cancelled) return
+        if (authenticatedUser) {
+          adoptLegacyBrowserCache(authenticatedUser)
+          setUser(authenticatedUser)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setAuthError('Could not connect to EquiOrder. Start the API server and try again.')
+      })
+      .finally(() => {
+        if (!cancelled) setIsCheckingSession(false)
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  function handleAuthenticated(authenticatedUser) {
+    adoptLegacyBrowserCache(authenticatedUser)
+    setAuthError('')
+    setUser(authenticatedUser)
+  }
+
+  if (isCheckingSession) {
+    return (
+      <main className="grid min-h-screen place-items-center px-4 text-[#102a5c]">
+        <div className="rounded-2xl border border-white/90 bg-[#eaf2fc] px-6 py-5 text-sm font-bold neo-raised-sm" role="status">
+          Loading your workspace…
+        </div>
+      </main>
+    )
+  }
+
+  return user
+    ? <DashboardApp user={user} onLogout={() => setUser(null)} />
+    : <LoginPage onAuthenticated={handleAuthenticated} initialError={authError} />
 }
 
 export default App

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-function ProfileDropdown({ onLogout }) {
+function ProfileDropdown({ name, email, onLogout }) {
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef(null)
 
@@ -32,7 +32,7 @@ function ProfileDropdown({ onLogout }) {
         className="button-secondary inline-flex min-h-11 items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 active:scale-95"
       >
         <span className="grid size-8 place-items-center rounded-full bg-linear-to-br from-sky-400 to-blue-700 text-xs font-extrabold text-white" aria-hidden="true">
-          EU
+          {name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}
         </span>
         <span className="hidden text-sm font-bold sm:inline">Profile</span>
         <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className={`size-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}>
@@ -44,11 +44,11 @@ function ProfileDropdown({ onLogout }) {
         <section id="profile-menu" aria-label="Profile" className="absolute right-0 z-50 mt-3 w-[min(19rem,calc(100vw-2rem))] rounded-2xl border border-white/80 bg-[#eaf2fc] p-3 neo-raised dark:border-white/10">
           <div className="flex items-center gap-3 rounded-xl bg-white/50 p-3 dark:bg-white/5">
             <span className="grid size-11 shrink-0 place-items-center rounded-full bg-linear-to-br from-sky-400 to-blue-700 text-sm font-extrabold text-white" aria-hidden="true">
-              EU
+              {name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}
             </span>
             <div className="min-w-0">
-              <p className="truncate text-sm font-extrabold text-[#102a5c]">EquiOrder User</p>
-              <p className="truncate text-xs font-medium text-slate-600">user@gmail.com</p>
+              <p className="truncate text-sm font-extrabold text-[#102a5c]">{name}</p>
+              <p className="truncate text-xs font-medium text-slate-600">{email}</p>
             </div>
           </div>
           <div className="my-3 border-t border-slate-200 dark:border-white/10" />

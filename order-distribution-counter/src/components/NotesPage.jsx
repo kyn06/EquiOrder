@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import CopyButton from './CopyButton'
 import {
   actions,
@@ -6,7 +6,6 @@ import {
   generateCRMLog,
   generateSalesMessage,
   getMessageVersion,
-  quickCopyNotes,
   supportsSuggestedFormat,
 } from '../utils/notes'
 
@@ -29,7 +28,90 @@ function OutputPreview({ title, value, placeholder, copyLabel, rows }) {
   )
 }
 
-function QuickCopyNotes() {
+function QuickCopyNotes({ userId }) {
+  const [notes, setNotes] = useState([])
+  const [newNote, setNewNote] = useState('')
+  const [editingId, setEditingId] = useState(null)
+  const [editingText, setEditingText] = useState('')
+  const [error, setError] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/quick-notes', { credentials: 'same-origin' })
+      .then(async (response) => {
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error || 'Could not load your notes.')
+        if (!cancelled) setNotes(result.notes ?? [])
+      })
+      .catch((requestError) => {
+        if (!cancelled) setError(requestError.message || 'Could not load your notes.')
+      })
+    return () => { cancelled = true }
+  }, [userId])
+
+  async function addNote(event) {
+    event.preventDefault()
+    if (!newNote.trim()) return
+    setIsSaving(true)
+    setError('')
+    try {
+      const response = await fetch('/api/quick-notes', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ note: newNote }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Could not add the note.')
+      setNotes((current) => [...current, result.note])
+      setNewNote('')
+    } catch (requestError) {
+      setError(requestError.message || 'Could not add the note.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function saveNote(id) {
+    if (!editingText.trim()) return
+    setIsSaving(true)
+    setError('')
+    try {
+      const response = await fetch(`/api/quick-notes/${id}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ note: editingText }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Could not update the note.')
+      setNotes((current) => current.map((note) => note.id === id ? result.note : note))
+      setEditingId(null)
+      setEditingText('')
+    } catch (requestError) {
+      setError(requestError.message || 'Could not update the note.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function deleteNote(id) {
+    setError('')
+    try {
+      const response = await fetch(`/api/quick-notes/${id}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Could not delete the note.')
+      setNotes((current) => current.filter((note) => note.id !== id))
+      if (editingId === id) setEditingId(null)
+    } catch (requestError) {
+      setError(requestError.message || 'Could not delete the note.')
+    }
+  }
+
   return (
     <section className="rounded-[28px] border border-white/90 bg-[#eaf2fc] p-5 neo-raised sm:p-6">
       <div>
@@ -41,24 +123,61 @@ function QuickCopyNotes() {
         </h3>
       </div>
 
+      <form onSubmit={addNote} className="mt-5 space-y-2">
+        <label htmlFor="new-quick-note" className="block text-xs font-bold text-[#254779]">Add frequently used text</label>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input
+            id="new-quick-note"
+            value={newNote}
+            onChange={(event) => setNewNote(event.target.value)}
+            maxLength={1000}
+            placeholder="Enter a note to keep handy"
+            className="neo-inset min-h-11 min-w-0 flex-1 rounded-xl border border-white/90 bg-[#eaf2fc] px-3 py-2 text-sm font-medium text-[#102a5c] outline-none placeholder:text-slate-500 focus-visible:ring-4 focus-visible:ring-blue-200"
+          />
+          <button type="submit" disabled={isSaving || !newNote.trim()} className="button-primary min-h-11 rounded-xl px-4 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-50">Add note</button>
+        </div>
+      </form>
+
+      {error && <p role="alert" className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800">{error}</p>}
+
       <ul className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-        {quickCopyNotes.map((note, index) => (
+        {notes.map((entry) => (
           <li
-            key={`${index}-${note}`}
-            className="flex min-h-16 min-w-0 items-center justify-between gap-3 rounded-2xl border border-white/90 bg-[#eaf2fc] p-3 neo-raised-sm"
+            key={entry.id}
+            className="min-w-0 rounded-2xl border border-white/90 bg-[#eaf2fc] p-3 neo-raised-sm"
           >
-            <p className="min-w-0 break-words font-mono text-xs font-bold leading-5 text-[#254779]">
-              {note}
-            </p>
-            <CopyButton text={note} label="Copy" compact />
+            {editingId === entry.id ? (
+              <div className="space-y-2">
+                <label htmlFor={`edit-note-${entry.id}`} className="sr-only">Edit frequently used text</label>
+                <textarea id={`edit-note-${entry.id}`} value={editingText} onChange={(event) => setEditingText(event.target.value)} maxLength={1000} rows={3} className="neo-inset w-full resize-y rounded-xl border border-white/90 bg-[#eaf2fc] px-3 py-2 font-mono text-xs leading-5 text-[#102a5c] outline-none focus-visible:ring-4 focus-visible:ring-blue-200" />
+                <div className="flex justify-end gap-2">
+                  <button type="button" onClick={() => setEditingId(null)} className="button-secondary min-h-10 rounded-xl px-3 text-xs font-bold">Cancel</button>
+                  <button type="button" onClick={() => saveNote(entry.id)} disabled={isSaving || !editingText.trim()} className="button-primary min-h-10 rounded-xl px-3 text-xs font-bold disabled:opacity-50">Save</button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex min-w-0 items-center justify-between gap-3">
+                <p className="min-w-0 break-words font-mono text-xs font-bold leading-5 text-[#254779]">{entry.note}</p>
+                <div className="flex shrink-0 items-center gap-1">
+                  <CopyButton text={entry.note} label="Copy" compact />
+                  <button type="button" onClick={() => { setEditingId(entry.id); setEditingText(entry.note) }} aria-label="Edit note" title="Edit note" className="button-secondary grid size-9 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="size-4"><path d="m16 4 4 4M4 20l4-.8L19 8a2.1 2.1 0 0 0-3-3L5 16l-1 4Z" /></svg>
+                  </button>
+                  <button type="button" onClick={() => deleteNote(entry.id)} aria-label="Delete note" title="Delete note" className="button-danger grid size-9 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="size-4"><path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6" /></svg>
+                  </button>
+                </div>
+              </div>
+            )}
           </li>
         ))}
       </ul>
+      {notes.length === 0 && !error && <p className="mt-4 rounded-xl border border-white/80 bg-[#eaf2fc] px-4 py-3 text-sm font-medium text-slate-600">No saved text yet. Add a note to keep it close.</p>}
     </section>
   )
 }
 
-function NotesPage() {
+function NotesPage({ userId }) {
   const [oid, setOid] = useState('')
   const [errorType, setErrorType] = useState('Others')
   const [action, setAction] = useState('Include')
@@ -387,7 +506,7 @@ function NotesPage() {
       </section>
 
       <div className="order-1 xl:sticky xl:top-6 xl:order-2">
-        <QuickCopyNotes />
+        <QuickCopyNotes userId={userId} />
       </div>
     </div>
   )

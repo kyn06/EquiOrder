@@ -9,11 +9,12 @@ EquiOrder is a team order distribution dashboard. It helps a team share each inc
 - Updates completed totals after each batch and recalculates pending orders so the team can catch up evenly.
 - Keeps the ten most recent batches available on the dashboard.
 - Provides a Notes page for standardized Sales messages, CRM logs, and quick-copy snippets.
+- Supports private accounts with separate rosters, order progress, and frequently used text.
 - Supports light and dark themes.
 
 ## Notes page
 
-Choose **Notes** in the main navigation to generate Sales messages and CRM logs or copy a frequently used note. Outputs update as you fill in the fields; generated text is not stored in the database.
+Choose **Notes** in the main navigation to generate Sales messages and CRM logs or copy a frequently used note. Add, edit, or delete frequently used text for the signed-in account. Generated Sales and CRM text is not stored in the database.
 
 ## Manage weekday rosters
 
@@ -29,9 +30,9 @@ Completed and pending counts, the latest allocations, and the ten most recent ba
 
 ## Data storage
 
-The app uses a PostgreSQL API. Each weekday's roster stores teammate details, custom order, and completed/pending counts. Order progress also keeps those counts with allocations and recent batches, and the API keeps both copies in sync. Clearing progress resets counts while preserving teammate details. Existing weekday rosters and cached progress in browser storage are imported when that weekday has no saved database data.
+The app uses a PostgreSQL API. Passwords are stored as scrypt hashes and sessions use HTTP-only cookies. Each account has separate weekday rosters, order progress, and frequently used text. Clearing progress resets counts while preserving teammate details. On startup, existing roster and progress tables are assigned to the initial account. Existing browser-cached roster and progress are imported to that account when it signs in.
 
-The database tables are created from [`server/schema.sql`](server/schema.sql) when the API starts. Configure `DATABASE_URL` in a local `.env` file based on [`.env.example`](.env.example). Keep `.env` private.
+The database tables are created from [`server/schema.sql`](server/schema.sql) when the API starts. Configure `DATABASE_URL`, `INITIAL_ACCOUNT_EMAIL`, and `INITIAL_ACCOUNT_PASSWORD` in a private local `.env` file based on [`.env.example`](.env.example). The initial account is created once; later registrations start with no saved team, distribution history, or frequently used text.
 
 ## Run locally
 
