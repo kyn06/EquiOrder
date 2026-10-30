@@ -123,6 +123,22 @@ function QuickCopyNotes({ userId }) {
         </h3>
       </div>
 
+      <div className="mt-5 border-y border-white/80 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-blue-700">Audit note</p>
+            <p className="mt-1 break-words font-mono text-xs font-semibold leading-5 text-[#254779]">
+              Viewed customer and recipient information for auditing and verification purposes. Time: [Current Time].
+            </p>
+          </div>
+          <CopyButton
+            label="AUDIT TIME"
+            compact
+            getText={() => `Viewed customer and recipient information for auditing and verification purposes. Time: ${new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' })}.`}
+          />
+        </div>
+      </div>
+
       <form onSubmit={addNote} className="mt-5 space-y-2">
         <label htmlFor="new-quick-note" className="block text-xs font-bold text-[#254779]">Add frequently used text</label>
         <div className="flex flex-col gap-2 sm:flex-row">

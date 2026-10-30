@@ -1,21 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
 
-function CopyButton({ text, label, disabled = false, compact = false }) {
+function CopyButton({ text, getText, label, disabled = false, compact = false }) {
   const [feedback, setFeedback] = useState({ text: null, message: '' })
   const timeoutRef = useRef(null)
 
   useEffect(() => () => window.clearTimeout(timeoutRef.current), [])
 
   async function handleCopy() {
-    if (disabled || !text) return
+    if (disabled) return
 
     window.clearTimeout(timeoutRef.current)
     try {
       if (!navigator.clipboard?.writeText) {
         throw new Error('Clipboard access is unavailable.')
       }
-      await navigator.clipboard.writeText(text)
-      setFeedback({ text, message: 'Copied!' })
+      const valueToCopy = getText ? getText() : text
+      if (!valueToCopy) return
+      await navigator.clipboard.writeText(valueToCopy)
+      setFeedback({ text: valueToCopy, message: 'Copied!' })
     } catch {
       setFeedback({ text, message: 'Copy failed. Try selecting the text manually.' })
     }
@@ -25,14 +27,14 @@ function CopyButton({ text, label, disabled = false, compact = false }) {
     )
   }
 
-  const feedbackMessage = feedback.text === text ? feedback.message : ''
+  const feedbackMessage = feedback.message
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <button
         type="button"
         onClick={handleCopy}
-        disabled={disabled || !text}
+        disabled={disabled || (!getText && !text)}
         className={`button-secondary inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-bold neo-raised-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:cursor-not-allowed disabled:opacity-50 ${compact ? 'min-w-24' : ''}`}
       >
         <svg

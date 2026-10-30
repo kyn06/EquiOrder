@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import DistributionForm from './components/DistributionForm'
+import CopyButton from './components/CopyButton'
 import DropdownSelect from './components/DropdownSelect'
 import LoginPage from './components/LoginPage'
 import NotesPage from './components/NotesPage'
@@ -1148,8 +1149,10 @@ function DashboardApp({ user, onLogout }) {
     try {
       await navigator.clipboard.writeText(oids.join('\n'))
       setOidMessage(`${teammateName} copied. Paste into Google Sheets for one OID per cell.`)
+      return true
     } catch {
       setOidMessage('Copy failed. Select the OIDs and copy them manually.')
+      return false
     }
   }
 
@@ -1233,18 +1236,11 @@ function DashboardApp({ user, onLogout }) {
               <h1 className="text-xl font-extrabold tracking-tight text-[#102a5c]">
                 EquiOrder
               </h1>
-              <p className="text-xs font-medium text-slate-600">
-                {activePage === 'notes'
-                  ? 'Sales & CRM notes'
-                  : activePage === 'oid-distribution'
-                    ? 'Copy-ready OID distribution'
-                    : 'Order distribution'}
-              </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <Sidebar activePage={activePage} onNavigate={setActivePage} />
+          <Sidebar activePage={activePage} onNavigate={setActivePage} />
+          <div className="order-2 ml-auto flex flex-wrap items-center justify-end gap-2 sm:gap-3 xl:order-none">
             <ProfileDropdown
               name={user.name}
               email={user.email}
@@ -1325,6 +1321,15 @@ function DashboardApp({ user, onLogout }) {
                   options={weekdays.map((weekday) => ({ value: weekday, label: weekday }))}
                 />
               </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-3 self-end sm:ml-auto">
+              <CopyButton
+                label="AUDIT TIME"
+                compact
+                getText={() => `Viewed customer and recipient information for auditing and verification purposes. Time: ${new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' })}.`}
+              />
+              <CopyButton label="FTD NOTE" compact text="AUDITED || FTD || COMPLETED BY" />
+              <CopyButton label="BLM NOTE" compact text="AUDITED || BLM|| COMPLETED BY" />
             </div>
           </section>
         )}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { distributeOrders } from '../utils/distribution'
 
 function parseOids(value) {
@@ -12,6 +12,10 @@ function OidDistributionPage({ team, selectedDay }) {
   const [oidInput, setOidInput] = useState('')
   const [assignments, setAssignments] = useState([])
   const [message, setMessage] = useState('')
+  const [copiedTarget, setCopiedTarget] = useState('')
+  const copyTimeoutRef = useRef(null)
+
+  useEffect(() => () => window.clearTimeout(copyTimeoutRef.current), [])
 
   const oidCount = useMemo(() => parseOids(oidInput).length, [oidInput])
   const workingCount = team.filter((person) => person.status === 'working').length
@@ -41,12 +45,17 @@ function OidDistributionPage({ team, selectedDay }) {
     setMessage(`${oids.length} OID${oids.length === 1 ? '' : 's'} distributed across ${workingCount} working teammate${workingCount === 1 ? '' : 's'}.`)
   }
 
-  async function copyOids(oids, teammateName = 'OIDs') {
+  async function copyOids(oids, teammateName = 'OIDs', target = teammateName) {
     try {
       await navigator.clipboard.writeText(oids.join('\n'))
       setMessage(`${teammateName} copied. Paste into Google Sheets for one OID per cell.`)
+      setCopiedTarget(target)
+      window.clearTimeout(copyTimeoutRef.current)
+      copyTimeoutRef.current = window.setTimeout(() => setCopiedTarget(''), 2000)
+      return true
     } catch {
       setMessage('Copy failed. Select the OIDs and copy them manually.')
+      return false
     }
   }
 
@@ -102,10 +111,10 @@ function OidDistributionPage({ team, selectedDay }) {
             </div>
             <button
               type="button"
-              onClick={() => copyOids(assignments.flatMap(({ oids }) => oids), 'All OIDs')}
+              onClick={() => copyOids(assignments.flatMap(({ oids }) => oids), 'All OIDs', 'all')}
               className="button-secondary min-h-11 rounded-xl px-4 py-2 text-sm font-bold neo-raised-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
             >
-              Copy all OIDs
+              {copiedTarget === 'all' ? 'Copied!' : 'Copy all OIDs'}
             </button>
           </div>
 
@@ -119,11 +128,11 @@ function OidDistributionPage({ team, selectedDay }) {
                   </div>
                   <button
                     type="button"
-                    onClick={() => copyOids(assignment.oids, assignment.name)}
+                    onClick={() => copyOids(assignment.oids, assignment.name, assignment.id)}
                     disabled={assignment.oids.length === 0}
                     className="button-primary rounded-lg px-3 py-2 text-xs font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Copy
+                    {copiedTarget === assignment.id ? 'Copied!' : 'Copy'}
                   </button>
                 </div>
                 <div className="max-h-80 overflow-y-auto p-3">

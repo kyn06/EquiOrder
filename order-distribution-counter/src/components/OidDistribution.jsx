@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { parseOids } from '../utils/oidDistribution'
 
 export function OidDistributionControls({ team, oidInput, onOidInputChange, onClear, onCalculate, message, canUndo, canRedo, onUndo, onRedo }) {
@@ -25,18 +26,31 @@ export function OidDistributionControls({ team, oidInput, onOidInputChange, onCl
 }
 
 export function AssignedOids({ assignments, onCopy }) {
+  const [copiedTarget, setCopiedTarget] = useState('')
+  const timeoutRef = useRef(null)
+
+  useEffect(() => () => window.clearTimeout(timeoutRef.current), [])
+
   if (!assignments?.length) return null
+
+  async function copy(target, oids, name) {
+    const succeeded = await onCopy(oids, name)
+    if (!succeeded) return
+    setCopiedTarget(target)
+    window.clearTimeout(timeoutRef.current)
+    timeoutRef.current = window.setTimeout(() => setCopiedTarget(''), 2000)
+  }
 
   return (
     <section className="rounded-[30px] border border-white/90 bg-[#eaf2fc] p-5 neo-raised sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h3 className="text-xl font-extrabold tracking-tight text-[#102a5c]">Assigned OIDs</h3><p className="mt-1 text-sm text-slate-600">Copy a teammate’s OIDs and paste them into Google Sheets.</p></div>
-        <button type="button" onClick={() => onCopy(assignments.flatMap(({ oids }) => oids), 'All OIDs')} className="button-secondary min-h-11 rounded-xl px-4 py-2 text-sm font-bold neo-raised-sm">Copy all OIDs</button>
+        <button type="button" onClick={() => copy('all', assignments.flatMap(({ oids }) => oids), 'All OIDs')} className="button-secondary min-h-11 rounded-xl px-4 py-2 text-sm font-bold neo-raised-sm">{copiedTarget === 'all' ? 'Copied!' : 'Copy all OIDs'}</button>
       </div>
       <div className="mt-5 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {assignments.map((assignment) => (
           <section key={assignment.id} className="overflow-hidden rounded-2xl border border-white/90 bg-[#eaf2fc] neo-raised-sm">
-            <div className="flex items-center justify-between gap-3 border-b border-white/90 px-4 py-3"><div><h4 className="font-extrabold text-[#102a5c]">{assignment.name}</h4><p className="text-xs font-semibold text-slate-500">{assignment.oids.length} OID{assignment.oids.length === 1 ? '' : 's'}</p></div><button type="button" onClick={() => onCopy(assignment.oids, assignment.name)} disabled={assignment.oids.length === 0} className="button-primary rounded-lg px-3 py-2 text-xs font-extrabold disabled:cursor-not-allowed disabled:opacity-50">Copy</button></div>
+            <div className="flex items-center justify-between gap-3 border-b border-white/90 px-4 py-3"><div><h4 className="font-extrabold text-[#102a5c]">{assignment.name}</h4><p className="text-xs font-semibold text-slate-500">{assignment.oids.length} OID{assignment.oids.length === 1 ? '' : 's'}</p></div><button type="button" onClick={() => copy(assignment.id, assignment.oids, assignment.name)} disabled={assignment.oids.length === 0} className="button-primary rounded-lg px-3 py-2 text-xs font-extrabold disabled:cursor-not-allowed disabled:opacity-50">{copiedTarget === assignment.id ? 'Copied!' : 'Copy'}</button></div>
             <div className="max-h-80 overflow-y-auto p-3"><table className="w-full border-collapse" style={{ fontFamily: 'Arial, sans-serif', fontSize: '10pt' }}><tbody>{assignment.oids.map((oid, index) => <tr key={`${oid}-${index}`}><td style={{ border: '1px solid #000', padding: '4px 6px', textAlign: 'center' }}>{oid}</td></tr>)}</tbody></table>{assignment.oids.length === 0 && <p className="py-4 text-center text-xs font-semibold text-slate-500">No OIDs assigned.</p>}</div>
           </section>
         ))}
