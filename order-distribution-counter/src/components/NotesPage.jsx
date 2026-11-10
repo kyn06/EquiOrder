@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import CopyButton from './CopyButton'
 import { useAuditCounter } from '../utils/auditCounter'
+import { confirmDestructiveAction, showToast } from '../utils/swal'
 import {
   actions,
   errorTypes,
@@ -30,7 +31,18 @@ function OutputPreview({ title, value, placeholder, copyLabel, rows }) {
 }
 
 function QuickCopyNotes({ userId }) {
-  const [auditCount, incrementAudit] = useAuditCounter()
+  const [auditCount, incrementAudit, resetAudit] = useAuditCounter()
+
+  async function clearAuditCounter() {
+    const confirmed = await confirmDestructiveAction({
+      title: 'Clear audit counter?',
+      text: `This resets the current count of ${auditCount} back to 0. It also resets on its own at 8:50 AM ET.`,
+      confirmButtonText: 'Clear counter',
+    })
+    if (!confirmed) return
+    resetAudit()
+    showToast('Audit counter cleared')
+  }
   const [notes, setNotes] = useState([])
   const [newNote, setNewNote] = useState('')
   const [editingId, setEditingId] = useState(null)
@@ -133,13 +145,23 @@ function QuickCopyNotes({ userId }) {
               Viewed customer and recipient information for auditing and verification purposes. Time: [Current Time].
             </p>
           </div>
-          <CopyButton
-            label="AUDIT TIME"
-            compact
-            count={auditCount}
-            onCopy={incrementAudit}
-            getText={() => `Viewed customer and recipient information for auditing and verification purposes. Time: ${new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' })}.`}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <CopyButton
+              label="AUDIT TIME"
+              compact
+              count={auditCount}
+              onCopy={incrementAudit}
+              getText={() => `Viewed customer and recipient information for auditing and verification purposes. Time: ${new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' })}.`}
+            />
+            <button
+              type="button"
+              onClick={clearAuditCounter}
+              disabled={auditCount === 0}
+              className="button-danger min-h-11 rounded-xl px-4 py-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Clear counter
+            </button>
+          </div>
         </div>
       </div>
 

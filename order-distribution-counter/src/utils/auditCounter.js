@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 const STORAGE_KEY = 'equiorder.auditCounter'
+const CHANGE_EVENT = 'equiorder:audit-counter'
 const TIME_ZONE = 'America/New_York'
 const RESET_MINUTES = 8 * 60 + 50 // 8:50 AM Eastern
 
@@ -40,6 +41,8 @@ function writeCount(count) {
   } catch {
     // Ignore storage failures; the counter still works for this session.
   }
+  // Tell every other counter on this page (storage events only reach other tabs).
+  window.dispatchEvent(new Event(CHANGE_EVENT))
 }
 
 export function useAuditCounter() {
@@ -50,9 +53,11 @@ export function useAuditCounter() {
     const sync = () => setCount(readCount())
     const interval = window.setInterval(sync, 30000)
     window.addEventListener('storage', sync)
+    window.addEventListener(CHANGE_EVENT, sync)
     return () => {
       window.clearInterval(interval)
       window.removeEventListener('storage', sync)
+      window.removeEventListener(CHANGE_EVENT, sync)
     }
   }, [])
 
@@ -62,5 +67,10 @@ export function useAuditCounter() {
     setCount(next)
   }, [])
 
-  return [count, increment]
+  const reset = useCallback(() => {
+    writeCount(0)
+    setCount(0)
+  }, [])
+
+  return [count, increment, reset]
 }
