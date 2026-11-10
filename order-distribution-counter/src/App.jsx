@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import DistributionForm from './components/DistributionForm'
 import CopyButton from './components/CopyButton'
@@ -14,6 +13,7 @@ import StatCard from './components/StatCard'
 import TeamEditor from './components/TeamEditor'
 import TeamTable from './components/TeamTable'
 import { useAuditCounter } from './utils/auditCounter'
+import { confirmDestructiveAction, showAlert } from './utils/swal'
 import { distributeOrders } from './utils/distribution'
 import { createOidAssignments, parseOids } from './utils/oidDistribution'
 
@@ -301,25 +301,6 @@ function getInitialTheme() {
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false
 }
 
-function confirmDestructiveAction({ title, text, confirmButtonText }) {
-  const isDark = document.documentElement.classList.contains('dark')
-
-  return Swal.fire({
-    title,
-    text,
-    icon: 'warning',
-    showCancelButton: true,
-    reverseButtons: true,
-    focusCancel: true,
-    confirmButtonText,
-    cancelButtonText: 'Cancel',
-    confirmButtonColor: '#dc2626',
-    cancelButtonColor: '#64748b',
-    background: isDark ? '#172235' : '#eaf2fc',
-    color: isDark ? '#eaf2fc' : '#102a5c',
-  }).then((result) => result.isConfirmed)
-}
-
 function DashboardApp({ user, onLogout }) {
   const [isDark, setIsDark] = useState(getInitialTheme)
   const [easternTime, setEasternTime] = useState(() => formatEasternTime(new Date()))
@@ -521,15 +502,10 @@ function DashboardApp({ user, onLogout }) {
         const names = updatedRoster
           .filter(({ status }) => status === 'break')
           .map(({ name }) => name)
-        const isDark = document.documentElement.classList.contains('dark')
-        Swal.fire({
+        showAlert({
           title: names.length === 1 ? `${names[0]} is on break` : 'Teammates on break',
           text: `Currently on break: ${names.join(', ')}.`,
           icon: 'info',
-          confirmButtonText: 'OK',
-          confirmButtonColor: isDark ? '#2563eb' : '#1d4ed8',
-          background: isDark ? '#172235' : '#eaf2fc',
-          color: isDark ? '#eaf2fc' : '#102a5c',
         })
       }
 
@@ -1255,12 +1231,10 @@ function DashboardApp({ user, onLogout }) {
                   if (!response.ok) throw new Error('Could not sign out.')
                   onLogout()
                 } catch {
-                  Swal.fire({
+                  showAlert({
                     title: 'Could not sign out',
                     text: 'Check your connection and try again.',
                     icon: 'error',
-                    confirmButtonText: 'OK',
-                    confirmButtonColor: '#1d4ed8',
                   })
                 }
               }}

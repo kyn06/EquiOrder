@@ -1,17 +1,4 @@
-import Swal from 'sweetalert2'
-
-function showToast(message, isError) {
-  Swal.fire({
-    toast: true,
-    position: 'top-end',
-    icon: isError ? 'error' : 'success',
-    title: message,
-    showConfirmButton: false,
-    timer: 2000,
-    timerProgressBar: true,
-    customClass: { popup: isError ? 'equi-toast equi-toast-error' : 'equi-toast' },
-  })
-}
+import { showToast } from '../utils/swal'
 
 function CopyButton({ text, getText, label, disabled = false, compact = false, onCopy, count }) {
   async function handleCopy() {
