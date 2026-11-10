@@ -13,6 +13,7 @@ import Sidebar from './components/Sidebar'
 import StatCard from './components/StatCard'
 import TeamEditor from './components/TeamEditor'
 import TeamTable from './components/TeamTable'
+import { useAuditCounter } from './utils/auditCounter'
 import { distributeOrders } from './utils/distribution'
 import { createOidAssignments, parseOids } from './utils/oidDistribution'
 
@@ -337,6 +338,7 @@ function DashboardApp({ user, onLogout }) {
       : initialTeam,
   )
   const [activePage, setActivePage] = useState(getInitialActivePage)
+  const [auditCount, incrementAudit] = useAuditCounter()
   const [rosterSaved, setRosterSaved] = useState(
     Boolean(savedRosters[selectedDay]),
   )
@@ -1326,6 +1328,8 @@ function DashboardApp({ user, onLogout }) {
               <CopyButton
                 label="AUDIT TIME"
                 compact
+                count={auditCount}
+                onCopy={incrementAudit}
                 getText={() => `Viewed customer and recipient information for auditing and verification purposes. Time: ${new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' })}.`}
               />
               <CopyButton label="FTD NOTE" compact text="AUDITED || FTD || COMPLETED BY" />

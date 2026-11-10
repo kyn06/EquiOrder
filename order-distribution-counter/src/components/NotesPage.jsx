@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import CopyButton from './CopyButton'
+import { useAuditCounter } from '../utils/auditCounter'
 import {
   actions,
   errorTypes,
@@ -29,6 +30,7 @@ function OutputPreview({ title, value, placeholder, copyLabel, rows }) {
 }
 
 function QuickCopyNotes({ userId }) {
+  const [auditCount, incrementAudit] = useAuditCounter()
   const [notes, setNotes] = useState([])
   const [newNote, setNewNote] = useState('')
   const [editingId, setEditingId] = useState(null)
@@ -134,6 +136,8 @@ function QuickCopyNotes({ userId }) {
           <CopyButton
             label="AUDIT TIME"
             compact
+            count={auditCount}
+            onCopy={incrementAudit}
             getText={() => `Viewed customer and recipient information for auditing and verification purposes. Time: ${new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' })}.`}
           />
         </div>

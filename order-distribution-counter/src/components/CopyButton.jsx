@@ -1,15 +1,22 @@
-import { useEffect, useRef, useState } from 'react'
+import Swal from 'sweetalert2'
 
-function CopyButton({ text, getText, label, disabled = false, compact = false }) {
-  const [feedback, setFeedback] = useState({ text: null, message: '' })
-  const timeoutRef = useRef(null)
+function showToast(message, isError) {
+  Swal.fire({
+    toast: true,
+    position: 'top-end',
+    icon: isError ? 'error' : 'success',
+    title: message,
+    showConfirmButton: false,
+    timer: 2000,
+    timerProgressBar: true,
+    customClass: { popup: isError ? 'equi-toast equi-toast-error' : 'equi-toast' },
+  })
+}
 
-  useEffect(() => () => window.clearTimeout(timeoutRef.current), [])
-
+function CopyButton({ text, getText, label, disabled = false, compact = false, onCopy, count }) {
   async function handleCopy() {
     if (disabled) return
 
-    window.clearTimeout(timeoutRef.current)
     try {
       if (!navigator.clipboard?.writeText) {
         throw new Error('Clipboard access is unavailable.')
@@ -17,17 +24,12 @@ function CopyButton({ text, getText, label, disabled = false, compact = false })
       const valueToCopy = getText ? getText() : text
       if (!valueToCopy) return
       await navigator.clipboard.writeText(valueToCopy)
-      setFeedback({ text: valueToCopy, message: 'Copied!' })
+      showToast('Copied!', false)
+      onCopy?.()
     } catch {
-      setFeedback({ text, message: 'Copy failed. Try selecting the text manually.' })
+      showToast('Copy failed. Try selecting the text manually.', true)
     }
-    timeoutRef.current = window.setTimeout(
-      () => setFeedback({ text: null, message: '' }),
-      2500,
-    )
   }
-
-  const feedbackMessage = feedback.message
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -51,13 +53,15 @@ function CopyButton({ text, getText, label, disabled = false, compact = false })
           <path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" />
         </svg>
         {label}
+        {count !== undefined && (
+          <span
+            title="Audits today (resets 8:50 AM ET)"
+            className="-mr-1 min-w-4 border-l border-slate-400/30 pl-2 text-center text-[11px] font-semibold tabular-nums text-slate-500/70 dark:border-slate-200/25 dark:text-slate-200/80"
+          >
+            {count}
+          </span>
+        )}
       </button>
-      <span
-        aria-live="polite"
-        className={`text-xs font-semibold ${feedbackMessage.startsWith('Copy failed') ? 'text-red-700' : 'text-green-700'}`}
-      >
-        {feedbackMessage}
-      </span>
     </div>
   )
 }
