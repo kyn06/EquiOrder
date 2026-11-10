@@ -319,7 +319,7 @@ function DashboardApp({ user, onLogout }) {
       : initialTeam,
   )
   const [activePage, setActivePage] = useState(getInitialActivePage)
-  const [auditCount, incrementAudit] = useAuditCounter()
+  const [auditCount, incrementAudit, , undoAudit] = useAuditCounter()
   const [rosterSaved, setRosterSaved] = useState(
     Boolean(savedRosters[selectedDay]),
   )
@@ -1304,6 +1304,7 @@ function DashboardApp({ user, onLogout }) {
                 compact
                 count={auditCount}
                 onCopy={incrementAudit}
+                onUndo={undoAudit}
                 getText={() => `Viewed customer and recipient information for auditing and verification purposes. Time: ${new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' })}.`}
               />
               <CopyButton label="FTD NOTE" compact text="AUDITED || FTD || COMPLETED BY" />

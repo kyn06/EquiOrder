@@ -67,10 +67,16 @@ export function useAuditCounter() {
     setCount(next)
   }, [])
 
+  const undo = useCallback(() => {
+    const next = Math.max(0, readCount() - 1)
+    writeCount(next)
+    setCount(next)
+  }, [])
+
   const reset = useCallback(() => {
     writeCount(0)
     setCount(0)
   }, [])
 
-  return [count, increment, reset]
+  return [count, increment, reset, undo]
 }

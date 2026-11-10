@@ -1,6 +1,6 @@
 import { showToast } from '../utils/swal'
 
-function CopyButton({ text, getText, label, disabled = false, compact = false, onCopy, count }) {
+function CopyButton({ text, getText, label, disabled = false, compact = false, onCopy, onUndo, count }) {
   async function handleCopy() {
     if (disabled) return
 
@@ -20,6 +20,21 @@ function CopyButton({ text, getText, label, disabled = false, compact = false, o
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {onUndo && (
+        <button
+          type="button"
+          onClick={onUndo}
+          disabled={!count}
+          aria-label="Undo last audit count"
+          title="Undo last count"
+          className="button-secondary grid size-10 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="size-[1.15rem]">
+            <path d="M9 14 4 9l5-5" />
+            <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+          </svg>
+        </button>
+      )}
       <button
         type="button"
         onClick={handleCopy}

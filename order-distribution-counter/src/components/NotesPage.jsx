@@ -31,7 +31,7 @@ function OutputPreview({ title, value, placeholder, copyLabel, rows }) {
 }
 
 function QuickCopyNotes({ userId }) {
-  const [auditCount, incrementAudit, resetAudit] = useAuditCounter()
+  const [auditCount, incrementAudit, resetAudit, undoAudit] = useAuditCounter()
 
   async function clearAuditCounter() {
     const confirmed = await confirmDestructiveAction({
@@ -151,6 +151,7 @@ function QuickCopyNotes({ userId }) {
               compact
               count={auditCount}
               onCopy={incrementAudit}
+              onUndo={undoAudit}
               getText={() => `Viewed customer and recipient information for auditing and verification purposes. Time: ${new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' })}.`}
             />
             <button
