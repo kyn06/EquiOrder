@@ -323,7 +323,7 @@ function NotesPage({ userId }) {
               rows={2}
               value={oid}
               onChange={(event) => setOid(event.target.value)}
-              placeholder="e.g. N-3146-188045-2395 or OID: N-3146-188045-2395 (paste several, one per line)"
+              placeholder="(paste several, one per line)"
               autoComplete="off"
               aria-describedby="notes-oid-help"
               className="min-h-12 w-full rounded-2xl border border-white/90 bg-[#eaf2fc] px-4 py-3 font-medium text-[#102a5c] outline-none neo-inset placeholder:text-slate-500 focus-visible:ring-4 focus-visible:ring-blue-200"
