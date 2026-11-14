@@ -55,6 +55,16 @@ export function normalizeOid(value) {
   return oid ? `OID: ${oid}` : ''
 }
 
+// Accepts one or many OIDs (newline, space, comma separated, with or without "OID:" prefix).
+export function normalizeOids(value) {
+  return value
+    .replace(/OID\s*:/gi, ' ')
+    .split(/[\s,;]+/)
+    .filter(Boolean)
+    .map((oid) => `OID: ${oid}`)
+    .join('\n')
+}
+
 function punctuateMessage(value) {
   const message = value.trim().replace(/([.!?])\1+$/u, '$1')
   if (!message) return ''
@@ -101,8 +111,12 @@ export function generateSalesMessage({
   templateValue,
   timeWindow,
 }) {
-  const formattedOid = normalizeOid(oid)
+  const formattedOid = normalizeOids(oid)
   if (!formattedOid) return ''
+
+  if (errorType === 'Duplicated order' && !isWrongPunctuation && !isMissingCardMessage) {
+    return `${formattedOid}\nKindly verify if duplicated order. Thank you.\n@Placement`
+  }
 
   if (isWrongPunctuation && timeWindow === 'moreThan30') return ''
   if (isWrongPunctuation) {
@@ -148,7 +162,7 @@ export function generateCRMLog({
     return 'Wrong Punctuation | More than 30 minutes'
   }
 
-  if (!normalizeOid(oid)) return ''
+  if (!normalizeOids(oid)) return ''
 
   if (isWrongPunctuation) {
     if (timeWindow !== '30OrLess') return ''

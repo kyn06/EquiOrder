@@ -12,17 +12,33 @@ import {
 } from '../utils/notes'
 
 function OutputPreview({ title, value, placeholder, copyLabel, rows }) {
+  // Manual edits last until the generated text changes (form updated), then reset.
+  const [edit, setEdit] = useState({ base: value, text: value })
+  const text = edit.base === value ? edit.text : value
+  const isEdited = text !== value
+
   return (
     <section className="rounded-2xl border border-white/90 bg-[#eaf2fc] p-4 neo-raised-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h4 className="text-sm font-extrabold text-[#102a5c]">{title}</h4>
-        <CopyButton text={value} label={copyLabel} />
+        <div className="flex items-center gap-2">
+          {isEdited && (
+            <button
+              type="button"
+              onClick={() => setEdit({ base: value, text: value })}
+              className="rounded-lg px-2 py-1 text-xs font-bold text-blue-700 hover:underline"
+            >
+              Reset
+            </button>
+          )}
+          <CopyButton text={text} label={copyLabel} />
+        </div>
       </div>
       <textarea
         aria-label={`${title} preview`}
-        readOnly
         rows={rows}
-        value={value}
+        value={text}
+        onChange={(event) => setEdit({ base: value, text: event.target.value })}
         placeholder={placeholder}
         className="neo-inset mt-3 w-full resize-y rounded-xl border border-white/90 bg-[#eaf2fc] px-3 py-3 font-mono text-sm leading-6 text-[#102a5c] outline-none placeholder:font-sans placeholder:text-slate-500"
       />
@@ -302,19 +318,17 @@ function NotesPage({ userId }) {
             >
               Order ID (OID)
             </label>
-            <input
+            <textarea
               id="notes-oid"
-              type="text"
+              rows={2}
               value={oid}
               onChange={(event) => setOid(event.target.value)}
-              placeholder="e.g. N-3146-188045-2395 or OID: N-3146-188045-2395"
+              placeholder="e.g. N-3146-188045-2395 or OID: N-3146-188045-2395 (paste several, one per line)"
               autoComplete="off"
               aria-describedby="notes-oid-help"
               className="min-h-12 w-full rounded-2xl border border-white/90 bg-[#eaf2fc] px-4 py-3 font-medium text-[#102a5c] outline-none neo-inset placeholder:text-slate-500 focus-visible:ring-4 focus-visible:ring-blue-200"
             />
-            <p id="notes-oid-help" className="mt-1 text-xs text-slate-600">
-              Required for Sales messages and standard CRM logs. The more-than-30-minutes rule does not need an OID.
-            </p>
+            
           </div>
 
           <div className="sm:col-span-2">
