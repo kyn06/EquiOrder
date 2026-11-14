@@ -1,4 +1,4 @@
-import { OidDistributionControls } from './OidDistribution'
+import { OidDistributionControls } from '../oid-distribution/OidDistribution'
 
 function DistributionForm({
   team,

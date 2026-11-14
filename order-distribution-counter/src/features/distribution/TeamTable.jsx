@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import DropdownSelect from './DropdownSelect'
+import DropdownSelect from '../../components/ui/DropdownSelect'
 
 const sortOptions = [
   { value: 'custom', label: 'Custom order' },

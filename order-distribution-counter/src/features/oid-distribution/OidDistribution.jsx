@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { parseOids } from '../utils/oidDistribution'
+import { parseOids } from './oidAssignments'
 
 export function OidDistributionControls({ team, oidInput, onOidInputChange, onClear, onCalculate, message, canUndo, canRedo, onUndo, onRedo }) {
   const oidCount = parseOids(oidInput).length

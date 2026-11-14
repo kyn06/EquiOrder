@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import CopyButton from './CopyButton'
-import { useAuditCounter } from '../utils/auditCounter'
-import { confirmDestructiveAction, showToast } from '../utils/swal'
+import CopyButton from '../../components/ui/CopyButton'
+import { useAuditCounter } from './auditCounter'
+import { confirmDestructiveAction, showToast } from '../../lib/swal'
 import {
   actions,
   errorTypes,
@@ -9,7 +9,7 @@ import {
   generateSalesMessage,
   getMessageVersion,
   supportsSuggestedFormat,
-} from '../utils/notes'
+} from './notes'
 
 function OutputPreview({ title, value, placeholder, copyLabel, rows }) {
   // Manual edits last until the generated text changes (form updated), then reset.

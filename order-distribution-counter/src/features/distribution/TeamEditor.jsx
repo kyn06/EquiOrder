@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 
-import DropdownSelect from './DropdownSelect'
+import DropdownSelect from '../../components/ui/DropdownSelect'
 
 function TeamEditor({
   team,
@@ -94,20 +94,16 @@ function TeamEditor({
             <h3 className="mt-1 text-lg font-extrabold tracking-tight text-[#102a5c]">
               Manage weekday roster
             </h3>
+            <p className="-mt 1 text-xs leading-5 text-slate-700">
+              Save stores names, status, break times, custom order, and completed/pending counts.
+            </p>
           </div>
         </div>
 
-        <div className="mt-5 border-t border-white/90 pt-5">
+        <div className="mt-2 border-t border-white/90 pt-5">
           <div className="space-y-2">
-            <label
-              htmlFor="roster-weekday"
-              className="block text-sm font-bold text-[#254779]"
-            >
-              Roster weekday
-            </label>
-            <p className="-mt-1 text-xs leading-5 text-slate-600">
-              Save stores names, status, break times, custom order, and completed/pending counts.
-            </p>
+           
+            
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <DropdownSelect
                 label="Roster weekday"
@@ -146,9 +142,7 @@ function TeamEditor({
                   ? `Saved for ${selectedDay}`
                   : 'Unsaved roster changes')}
             </p>
-            <p aria-live="polite" className="min-h-5 text-xs font-medium text-slate-600">
-              {copyPasteMessage || 'Copy names, status, and break times to another weekday. Order counts stay with each day.'}
-            </p>
+            
           </div>
         </div>
       </section>
