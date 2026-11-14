@@ -1,4 +1,4 @@
-import { distributeOrders } from './distribution'
+import { distributeOrders } from '../distribution/distribution'
 
 export function parseOids(value) {
   return value.split(/\r?\n/).map((oid) => oid.trim()).filter(Boolean)

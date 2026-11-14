@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { distributeOrders } from '../utils/distribution'
+import { distributeOrders } from '../distribution/distribution'
 
 function parseOids(value) {
   return value
@@ -66,7 +66,7 @@ function OidDistributionPage({ team, selectedDay }) {
           <div>
             <h2 className="text-2xl font-extrabold tracking-tight text-[#102a5c]">OID Distribution</h2>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
-              Paste one actual OID per line, such as N-3162-967688-4058. The same distribution rules as the dashboard will assign them to working teammates.
+              Paste one actual OID per line, such as N-3162-967688-4058.
             </p>
           </div>
           <span className="w-fit shrink-0 rounded-full border border-white/80 bg-[#eaf2fc] px-3 py-1.5 text-xs font-bold text-blue-800 neo-raised-sm">

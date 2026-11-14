@@ -1,4 +1,4 @@
-import { showToast } from '../utils/swal'
+import { showToast } from '../../lib/swal'
 
 function CopyButton({ text, getText, label, disabled = false, compact = false, onCopy, onUndo, count }) {
   async function handleCopy() {
