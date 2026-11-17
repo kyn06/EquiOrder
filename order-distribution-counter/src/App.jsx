@@ -555,7 +555,7 @@ function DashboardApp({ user, onLogout }) {
     document.documentElement.classList.toggle('dark', isDark)
     document
       .querySelector('meta[name="theme-color"]')
-      ?.setAttribute('content', isDark ? '#172235' : '#eee1cd')
+      ?.setAttribute('content', isDark ? '#172235' : '#FEFEFA')
 
     try {
       window.localStorage.setItem('equiorder-theme', isDark ? 'dark' : 'light')
@@ -1190,7 +1190,7 @@ function DashboardApp({ user, onLogout }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#eaf2fc] text-[#102a5c]">
+    <div className="min-h-screen bg-[#FEFEFA] text-[#102a5c] dark:bg-[#1d2a3d]">
       <header className="px-4 pt-4 sm:px-6">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 rounded-[28px] border border-white/90 bg-[#eaf2fc] px-5 py-3 neo-raised sm:px-6">
           <div className="flex items-center gap-3">
@@ -1299,6 +1299,7 @@ function DashboardApp({ user, onLogout }) {
               </div>
             </div>
             )}
+            {activePage === 'dashboard' && (
             <div className="flex flex-wrap items-center justify-end gap-3 self-end sm:ml-auto">
               <CopyButton
                 label="AUDIT TIME"
@@ -1310,7 +1311,9 @@ function DashboardApp({ user, onLogout }) {
               />
               <CopyButton label="FTD NOTE" compact text="AUDITED || FTD || COMPLETED BY" />
               <CopyButton label="BLM NOTE" compact text="AUDITED || BLM|| COMPLETED BY" />
+              <CopyButton label="DOVE NOTE" compact text="AUDITED || DOVEPLUS || COMPLETED BY" />
             </div>
+            )}
           </section>
         )}
 

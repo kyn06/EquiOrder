@@ -2,20 +2,20 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --page-bg: #eee1cd;
-  --surface-bg: #f6ecdc;
+  --page-bg: #FEFEFA;
+  --surface-bg: #f3f5f8;
   --surface-border: rgba(255, 255, 255, 0.82);
   --text-primary: #102a5c;
   --text-secondary: #475569;
-  --shadow-raised-dark: rgba(132, 104, 69, 0.24);
+  --shadow-raised-dark: rgba(90, 100, 115, 0.28);
   --shadow-raised-light: rgba(255, 255, 255, 0.76);
-  --shadow-inset-dark: rgba(132, 104, 69, 0.18);
+  --shadow-inset-dark: rgba(90, 100, 115, 0.22);
   --shadow-inset-light: rgba(255, 255, 255, 0.82);
   --action-primary-bg: #1d4ed8;
   --action-primary-hover: #1e40af;
   --action-primary-fg: #ffffff;
   --action-primary-border: #1d4ed8;
-  --action-secondary-bg: #eaf2fc;
+  --action-secondary-bg: #f3f5f8;
   --action-secondary-hover: #dbeafe;
   --action-secondary-fg: #1e40af;
   --action-secondary-border: #93c5fd;
@@ -23,9 +23,9 @@
   --action-danger-hover: #ffe4e6;
   --action-danger-fg: #be123c;
   --action-danger-border: #fecdd3;
-  --team-row-odd: #f6ecdc;
-  --team-row-even: #e8d8bf;
-  --team-row-hover: #dfccb0;
+  --team-row-odd: #f3f5f8;
+  --team-row-even: #e6e9ee;
+  --team-row-hover: #d6dbe2;
 }
 
 .dark {
