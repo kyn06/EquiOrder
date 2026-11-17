@@ -6,7 +6,6 @@ import DropdownSelect from './components/ui/DropdownSelect'
 import LoginPage from './features/auth/LoginPage'
 import NotesPage from './features/notes/NotesPage'
 import { AssignedOids } from './features/oid-distribution/OidDistribution'
-import OidDistributionPage from './features/oid-distribution/OidDistributionPage'
 import ProfileDropdown from './components/layout/ProfileDropdown'
 import Sidebar from './components/layout/Sidebar'
 import StatCard from './components/ui/StatCard'
@@ -74,7 +73,7 @@ function getInitialActivePage() {
   if (typeof window !== 'undefined') {
     try {
       const savedPage = window.localStorage.getItem(activePageStorageKey)
-      if (['dashboard', 'oid-distribution', 'team', 'notes'].includes(savedPage)) {
+      if (['dashboard', 'oid-distribution', 'team'].includes(savedPage)) {
         return savedPage
       }
     } catch {
@@ -1281,8 +1280,9 @@ function DashboardApp({ user, onLogout }) {
       </header>
 
       <main className="mx-auto max-w-7xl space-y-7 px-4 py-8 sm:px-6 lg:py-10">
-        {activePage !== 'notes' && (
+        {(
           <section className="flex flex-col justify-between gap-4 px-1 sm:flex-row sm:items-end">
+            {activePage !== 'dashboard' && (
             <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
               <div className="flex min-h-11 items-center gap-2 rounded-xl border border-white/80 bg-[#eaf2fc] px-4 py-2 text-sm font-semibold text-[#254779] neo-raised-sm">
                 <span className="size-2 rounded-full bg-blue-600" />
@@ -1298,6 +1298,7 @@ function DashboardApp({ user, onLogout }) {
                 />
               </div>
             </div>
+            )}
             <div className="flex flex-wrap items-center justify-end gap-3 self-end sm:ml-auto">
               <CopyButton
                 label="AUDIT TIME"
@@ -1314,6 +1315,8 @@ function DashboardApp({ user, onLogout }) {
         )}
 
         {activePage === 'dashboard' ? (
+          <NotesPage userId={user.id} />
+        ) : activePage === 'oid-distribution' ? (
           <>
             <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <StatCard label="Total teammates" value={team.length} icon="people" />
@@ -1373,8 +1376,6 @@ function DashboardApp({ user, onLogout }) {
               </div>
             </div>
           </>
-        ) : activePage === 'oid-distribution' ? (
-          <OidDistributionPage team={team} selectedDay={selectedDay} />
         ) : activePage === 'team' ? (
           <TeamEditor
             team={team}
@@ -1397,9 +1398,7 @@ function DashboardApp({ user, onLogout }) {
             onBreakTimeChange={updateBreakTime}
             onStatusChange={updateTeamStatus}
           />
-        ) : (
-          <NotesPage userId={user.id} />
-        )}
+        ) : null}
 
         <footer className="py-6 text-center text-xs font-semibold text-slate-500">
           EquiOrder · Fair orders, smarter distribution.

@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 
 const pages = [
-  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'dashboard', label: 'Notes' },
   { id: 'oid-distribution', label: 'OID Distribution' },
   { id: 'team', label: 'Manage team' },
-  { id: 'notes', label: 'Notes' },
 ]
 
 function Sidebar({ activePage, onNavigate }) {
