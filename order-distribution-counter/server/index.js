@@ -25,6 +25,7 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 const schemaPath = new URL('./schema.sql', import.meta.url)
 const frontendDistPath = fileURLToPath(new URL('../dist/', import.meta.url))
 const sessionDurationSeconds = 60 * 60 * 24
+const startedAt = Date.now()
 const quickCopySeedNotes = [
   'PJ KIM T. GARCIA',
   '135432',
@@ -98,10 +99,11 @@ async function readSessionUser(request) {
   const token = readCookie(request, 'equiorder_session')
   if (!token) return null
   const result = await pool.query(
-    `SELECT users.id, users.email, users.display_name
+    `SELECT users.id, users.email, users.display_name, users.role
      FROM public.sessions
      JOIN public.users ON users.id = sessions.user_id
-     WHERE sessions.token_hash = $1 AND sessions.expires_at > now()`,
+     WHERE sessions.token_hash = $1 AND sessions.expires_at > now()
+       AND NOT users.is_disabled`,
     [hashSessionToken(token)],
   )
   return result.rows[0] ?? null
@@ -117,8 +119,24 @@ async function createSession(userId, request, response) {
   setSessionCookie(request, response, token)
 }
 
+async function logActivity(event, { userId = null, actorId = null, detail = '' } = {}) {
+  try {
+    await pool.query(
+      'INSERT INTO public.activity_log (user_id, actor_id, event, detail) VALUES ($1, $2, $3, $4)',
+      [userId, actorId, event, detail.slice(0, 500)],
+    )
+  } catch (error) {
+    console.error('Could not write activity log:', error.message)
+  }
+}
+
 function publicUser(user) {
-  return { id: Number(user.id), email: user.email, name: user.display_name }
+  return {
+    id: Number(user.id),
+    email: user.email,
+    name: user.display_name,
+    role: user.role ?? 'user',
+  }
 }
 
 function getRosterRows(rows) {
@@ -210,6 +228,121 @@ function validateRoster(roster) {
   return ''
 }
 
+async function handleAdminRequest(request, response, url, admin) {
+  if (url.pathname === '/api/admin/overview' && request.method === 'GET') {
+    const started = Date.now()
+    await pool.query('SELECT 1')
+    const dbLatencyMs = Date.now() - started
+    const stats = (await pool.query(`
+      SELECT
+        (SELECT count(*) FROM public.users) AS users,
+        (SELECT count(*) FROM public.users WHERE role = 'admin') AS admins,
+        (SELECT count(*) FROM public.users WHERE is_disabled) AS disabled,
+        (SELECT count(*) FROM public.users WHERE created_at > now() - interval '7 days') AS new_users_7d,
+        (SELECT count(*) FROM public.sessions WHERE expires_at > now()) AS active_sessions,
+        (SELECT count(DISTINCT user_id) FROM public.sessions WHERE expires_at > now()) AS online_users,
+        (SELECT count(*) FROM public.activity_log WHERE event = 'login' AND created_at > now() - interval '24 hours') AS logins_24h,
+        (SELECT count(*) FROM public.activity_log WHERE event = 'login_failed' AND created_at > now() - interval '24 hours') AS failed_logins_24h,
+        (SELECT count(*) FROM public.weekday_teammates) AS teammates,
+        (SELECT count(*) FROM public.quick_copy_notes) AS notes,
+        pg_database_size(current_database()) AS db_size_bytes
+    `)).rows[0]
+    const memory = process.memoryUsage()
+    const { db_size_bytes: dbSizeBytes, ...counts } = stats
+    return sendJson(response, 200, {
+      server: {
+        uptimeSeconds: Math.round((Date.now() - startedAt) / 1000),
+        nodeVersion: process.version,
+        memoryMb: Math.round(memory.rss / 1024 / 1024),
+        heapUsedMb: Math.round(memory.heapUsed / 1024 / 1024),
+        checkedAt: new Date().toISOString(),
+      },
+      database: { ok: true, latencyMs: dbLatencyMs, sizeBytes: Number(dbSizeBytes) },
+      counts: Object.fromEntries(Object.entries(counts).map(([key, value]) => [key, Number(value)])),
+    })
+  }
+
+  if (url.pathname === '/api/admin/users' && request.method === 'GET') {
+    const result = await pool.query(`
+      SELECT u.id, u.email, u.display_name, u.role, u.is_disabled, u.created_at, u.last_login_at,
+        (SELECT count(*) FROM public.sessions s WHERE s.user_id = u.id AND s.expires_at > now()) AS active_sessions,
+        (SELECT count(DISTINCT (t.weekday, t.teammate_id)) FROM public.weekday_teammates t WHERE t.user_id = u.id) AS teammates,
+        (SELECT count(*) FROM public.quick_copy_notes n WHERE n.user_id = u.id) AS notes
+      FROM public.users u ORDER BY u.created_at, u.id
+    `)
+    return sendJson(response, 200, {
+      users: result.rows.map((row) => ({
+        id: Number(row.id),
+        email: row.email,
+        name: row.display_name,
+        role: row.role,
+        disabled: row.is_disabled,
+        createdAt: row.created_at,
+        lastLoginAt: row.last_login_at,
+        activeSessions: Number(row.active_sessions),
+        teammates: Number(row.teammates),
+        notes: Number(row.notes),
+      })),
+    })
+  }
+
+  if (url.pathname === '/api/admin/activity' && request.method === 'GET') {
+    const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 200)
+    const result = await pool.query(`
+      SELECT a.id, a.event, a.detail, a.created_at, u.email AS user_email, actor.email AS actor_email
+      FROM public.activity_log a
+      LEFT JOIN public.users u ON u.id = a.user_id
+      LEFT JOIN public.users actor ON actor.id = a.actor_id
+      ORDER BY a.created_at DESC, a.id DESC LIMIT $1
+    `, [limit])
+    return sendJson(response, 200, {
+      events: result.rows.map((row) => ({
+        id: Number(row.id),
+        event: row.event,
+        detail: row.detail,
+        createdAt: row.created_at,
+        userEmail: row.user_email,
+        actorEmail: row.actor_email,
+      })),
+    })
+  }
+
+  const match = url.pathname.match(/^\/api\/admin\/users\/(\d+)\/(disable|enable|signout|password)$/)
+  if (match && request.method === 'POST') {
+    const targetId = Number(match[1])
+    const action = match[2]
+    const target = (await pool.query('SELECT id, role FROM public.users WHERE id = $1', [targetId])).rows[0]
+    if (!target) return sendJson(response, 404, { error: 'User not found.' })
+
+    if (action === 'disable') {
+      if (targetId === Number(admin.id)) {
+        return sendJson(response, 400, { error: 'You cannot disable your own account.' })
+      }
+      if (target.role === 'admin') {
+        return sendJson(response, 400, { error: 'Administrator accounts cannot be disabled.' })
+      }
+      await pool.query('UPDATE public.users SET is_disabled = true WHERE id = $1', [targetId])
+      await pool.query('DELETE FROM public.sessions WHERE user_id = $1', [targetId])
+    } else if (action === 'enable') {
+      await pool.query('UPDATE public.users SET is_disabled = false WHERE id = $1', [targetId])
+    } else if (action === 'signout') {
+      await pool.query('DELETE FROM public.sessions WHERE user_id = $1', [targetId])
+    } else {
+      const body = await readJson(request)
+      const password = typeof body.password === 'string' ? body.password : ''
+      if (password.length < 8 || password.length > 128) {
+        return sendJson(response, 400, { error: 'Password must be 8 to 128 characters.' })
+      }
+      await pool.query('UPDATE public.users SET password_hash = $2 WHERE id = $1', [targetId, await passwordHash(password)])
+      await pool.query('DELETE FROM public.sessions WHERE user_id = $1', [targetId])
+    }
+    await logActivity(`admin_${action}`, { userId: targetId, actorId: Number(admin.id) })
+    return sendJson(response, 200, { ok: true })
+  }
+
+  return sendJson(response, 404, { error: 'Not found.' })
+}
+
 async function handleRequest(request, response) {
   const url = new URL(request.url, 'http://localhost')
 
@@ -232,13 +365,20 @@ async function handleRequest(request, response) {
       return sendJson(response, 400, { error: 'Enter your email and password.' })
     }
     const result = await pool.query(
-      'SELECT id, email, display_name, password_hash FROM public.users WHERE email = $1',
+      'SELECT id, email, display_name, password_hash, role, is_disabled FROM public.users WHERE email = $1',
       [email],
     )
     const user = result.rows[0]
     if (!user || !(await verifyPassword(password, user.password_hash))) {
+      await logActivity('login_failed', { userId: user?.id ?? null, detail: user ? '' : email })
       return sendJson(response, 401, { error: 'Email or password is incorrect.' })
     }
+    if (user.is_disabled) {
+      await logActivity('login_blocked', { userId: user.id, detail: 'Account disabled' })
+      return sendJson(response, 403, { error: 'This account has been disabled. Contact an administrator.' })
+    }
+    await pool.query('UPDATE public.users SET last_login_at = now() WHERE id = $1', [user.id])
+    await logActivity('login', { userId: user.id })
     await createSession(user.id, request, response)
     return sendJson(response, 200, { user: publicUser(user) })
   }
@@ -258,10 +398,12 @@ async function handleRequest(request, response) {
       const result = await pool.query(
         `INSERT INTO public.users (email, display_name, password_hash)
          VALUES ($1, $2, $3)
-         RETURNING id, email, display_name`,
+         RETURNING id, email, display_name, role`,
         [email, displayName, await passwordHash(password)],
       )
       const user = result.rows[0]
+      await pool.query('UPDATE public.users SET last_login_at = now() WHERE id = $1', [user.id])
+      await logActivity('register', { userId: user.id })
       await createSession(user.id, request, response)
       return sendJson(response, 201, { user: publicUser(user) })
     } catch (error) {
@@ -275,7 +417,11 @@ async function handleRequest(request, response) {
   if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
     const token = readCookie(request, 'equiorder_session')
     if (token) {
-      await pool.query('DELETE FROM public.sessions WHERE token_hash = $1', [hashSessionToken(token)])
+      const ended = await pool.query(
+        'DELETE FROM public.sessions WHERE token_hash = $1 RETURNING user_id',
+        [hashSessionToken(token)],
+      )
+      if (ended.rows[0]) await logActivity('logout', { userId: ended.rows[0].user_id })
     }
     clearSessionCookie(request, response)
     return sendJson(response, 200, { ok: true })
@@ -284,6 +430,13 @@ async function handleRequest(request, response) {
   const user = await readSessionUser(request)
   if (!user) return sendJson(response, 401, { error: 'Sign in to continue.' })
   const userId = user.id
+
+  if (url.pathname.startsWith('/api/admin/')) {
+    if (user.role !== 'admin') {
+      return sendJson(response, 403, { error: 'Administrator access required.' })
+    }
+    return handleAdminRequest(request, response, url, user)
+  }
 
   if (url.pathname === '/api/quick-notes' && request.method === 'GET') {
     const result = await pool.query(
@@ -652,6 +805,31 @@ async function initializeBootstrapAccount() {
   return account
 }
 
+async function initializeAdminAccount() {
+  const email = process.env.ADMIN_ACCOUNT_EMAIL?.trim().toLowerCase()
+  const password = process.env.ADMIN_ACCOUNT_PASSWORD
+  if (!email) return
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error('ADMIN_ACCOUNT_EMAIL is invalid.')
+  }
+
+  const existing = await pool.query('SELECT id FROM public.users WHERE email = $1', [email])
+  if (existing.rowCount > 0) {
+    await pool.query("UPDATE public.users SET role = 'admin', is_disabled = false WHERE email = $1", [email])
+    return
+  }
+  if (!password || password.length < 8) {
+    throw new Error('ADMIN_ACCOUNT_PASSWORD (8+ characters) is required to create the admin account.')
+  }
+  const name = process.env.ADMIN_ACCOUNT_NAME?.trim() || 'System Admin'
+  await pool.query(
+    `INSERT INTO public.users (email, display_name, password_hash, role)
+     VALUES ($1, $2, $3, 'admin') ON CONFLICT (email) DO NOTHING`,
+    [email, name, await passwordHash(password)],
+  )
+  console.log('Admin account created.')
+}
+
 async function migrateLegacyDataToAccount(userId) {
   const client = await pool.connect()
   try {
@@ -696,6 +874,7 @@ async function start() {
   await pool.query(schema)
   const bootstrapAccount = await initializeBootstrapAccount()
   await migrateLegacyDataToAccount(bootstrapAccount.id)
+  await initializeAdminAccount()
   await pool.query(`
     UPDATE public.sessions
     SET expires_at = LEAST(expires_at, created_at + interval '1 day')

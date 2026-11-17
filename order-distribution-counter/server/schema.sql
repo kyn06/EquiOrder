@@ -75,3 +75,18 @@ CREATE TABLE IF NOT EXISTS public.quick_copy_notes (
 
 CREATE INDEX IF NOT EXISTS quick_copy_notes_user_position_idx
   ON public.quick_copy_notes(user_id, position, id);
+
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'user';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_disabled boolean NOT NULL DEFAULT false;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS last_login_at timestamptz;
+
+CREATE TABLE IF NOT EXISTS public.activity_log (
+  id bigserial PRIMARY KEY,
+  user_id bigint REFERENCES public.users(id) ON DELETE SET NULL,
+  actor_id bigint REFERENCES public.users(id) ON DELETE SET NULL,
+  event text NOT NULL,
+  detail text NOT NULL DEFAULT '',
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS activity_log_created_at_idx ON public.activity_log(created_at DESC);

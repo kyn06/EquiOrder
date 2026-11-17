@@ -5,8 +5,10 @@ const pages = [
   { id: 'oid-distribution', label: 'OID Distribution' },
   { id: 'team', label: 'Manage team' },
 ]
+const adminPage = { id: 'admin', label: 'Admin' }
 
-function Sidebar({ activePage, onNavigate }) {
+function Sidebar({ activePage, onNavigate, isAdmin = false }) {
+  const visiblePages = isAdmin ? [adminPage] : pages
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef(null)
 
@@ -44,7 +46,7 @@ function Sidebar({ activePage, onNavigate }) {
         </button>
         {isOpen && (
           <nav id="mobile-topbar-menu" aria-label="Main navigation" className="absolute right-0 z-50 mt-2 w-56 rounded-2xl border border-white/80 bg-[#eaf2fc] p-2 neo-raised dark:border-white/10">
-            {pages.map((page) => (
+            {visiblePages.map((page) => (
               <button
                 key={page.id}
                 type="button"
@@ -59,7 +61,7 @@ function Sidebar({ activePage, onNavigate }) {
         )}
       </div>
       <nav aria-label="Main navigation" className="order-3 hidden min-w-0 flex-wrap items-center gap-1 rounded-2xl border border-white/80 bg-[#e1ebf7] p-1 neo-inset dark:border-white/10 dark:bg-[#15263f] sm:flex sm:w-full xl:order-none xl:w-auto xl:flex-1">
-        {pages.map((page) => (
+        {visiblePages.map((page) => (
           <button
             key={page.id}
             type="button"

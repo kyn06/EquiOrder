@@ -54,3 +54,23 @@ export function confirmDestructiveAction({ title, text, confirmButtonText }) {
     })
     .then((result) => result.isConfirmed)
 }
+
+export function promptNewPassword({ title, text }) {
+  return themed
+    .fire({
+      title,
+      text,
+      input: 'password',
+      inputPlaceholder: 'New password (8+ characters)',
+      inputAttributes: { autocomplete: 'new-password', maxlength: 128 },
+      showCancelButton: true,
+      confirmButtonText: 'Reset password',
+      cancelButtonText: 'Cancel',
+      inputValidator: (value) => (
+        value && value.length >= 8 && value.length <= 128
+          ? undefined
+          : 'Password must be 8 to 128 characters.'
+      ),
+    })
+    .then((result) => (result.isConfirmed ? result.value : null))
+}

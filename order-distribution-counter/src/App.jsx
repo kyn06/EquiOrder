@@ -3,6 +3,7 @@ import 'sweetalert2/dist/sweetalert2.min.css'
 import DistributionForm from './features/distribution/DistributionForm'
 import CopyButton from './components/ui/CopyButton'
 import DropdownSelect from './components/ui/DropdownSelect'
+import AdminPanel from './features/admin/AdminPanel'
 import LoginPage from './features/auth/LoginPage'
 import NotesPage from './features/notes/NotesPage'
 import { AssignedOids } from './features/oid-distribution/OidDistribution'
@@ -73,7 +74,7 @@ function getInitialActivePage() {
   if (typeof window !== 'undefined') {
     try {
       const savedPage = window.localStorage.getItem(activePageStorageKey)
-      if (['dashboard', 'oid-distribution', 'team'].includes(savedPage)) {
+      if (['dashboard', 'oid-distribution', 'team', 'admin'].includes(savedPage)) {
         return savedPage
       }
     } catch {
@@ -317,7 +318,9 @@ function DashboardApp({ user, onLogout }) {
         )
       : initialTeam,
   )
-  const [activePage, setActivePage] = useState(getInitialActivePage)
+  const [requestedPage, setActivePage] = useState(getInitialActivePage)
+  const isAdmin = user.role === 'admin'
+  const activePage = isAdmin ? 'admin' : requestedPage === 'admin' ? 'dashboard' : requestedPage
   const [auditCount, incrementAudit, , undoAudit] = useAuditCounter()
   const [rosterSaved, setRosterSaved] = useState(
     Boolean(savedRosters[selectedDay]),
@@ -1216,7 +1219,7 @@ function DashboardApp({ user, onLogout }) {
             </div>
           </div>
 
-          <Sidebar activePage={activePage} onNavigate={setActivePage} />
+          <Sidebar activePage={activePage} onNavigate={setActivePage} isAdmin={isAdmin} />
           <div className="order-2 ml-auto flex flex-wrap items-center justify-end gap-2 sm:gap-3 xl:order-none">
             <ProfileDropdown
               name={user.name}
@@ -1282,7 +1285,7 @@ function DashboardApp({ user, onLogout }) {
       <main className="mx-auto max-w-7xl space-y-7 px-4 py-8 sm:px-6 lg:py-10">
         {(
           <section className="flex flex-col justify-between gap-4 px-1 sm:flex-row sm:items-end">
-            {activePage !== 'dashboard' && (
+            {activePage !== 'dashboard' && activePage !== 'admin' && (
             <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
               <div className="flex min-h-11 items-center gap-2 rounded-xl border border-white/80 bg-[#eaf2fc] px-4 py-2 text-sm font-semibold text-[#254779] neo-raised-sm">
                 <span className="size-2 rounded-full bg-blue-600" />
@@ -1401,6 +1404,8 @@ function DashboardApp({ user, onLogout }) {
             onBreakTimeChange={updateBreakTime}
             onStatusChange={updateTeamStatus}
           />
+        ) : activePage === 'admin' ? (
+          <AdminPanel currentUserId={user.id} />
         ) : null}
 
         <footer className="py-6 text-center text-xs font-semibold text-slate-500">
